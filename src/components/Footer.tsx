@@ -1,3 +1,4 @@
+import { forwardRef } from "react";
 import { Link } from "react-router-dom";
 import {
   Facebook,
@@ -13,9 +14,9 @@ const socialLinks = [
   { name: "Twitter", icon: Twitter, url: "https://twitter.com/vsmcollection" },
 ];
 
-const Footer = () => {
+const Footer = forwardRef<HTMLElement>((_, ref) => {
   return (
-    <footer className="border-t border-border bg-card">
+    <footer ref={ref} className="border-t border-border bg-card">
       <div className="vsm-container py-12 md:py-16">
         <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-4">
           {/* Brand */}
@@ -146,6 +147,8 @@ const Footer = () => {
       </div>
     </footer>
   );
-};
+});
+
+Footer.displayName = "Footer";
 
 export default Footer;
