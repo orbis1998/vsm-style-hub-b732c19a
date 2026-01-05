@@ -1,54 +1,139 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { User, Mail, Lock, Eye, EyeOff, ArrowRight } from "lucide-react";
+import { z } from "zod";
+
+const loginSchema = z.object({
+  email: z.string().email("Email invalide"),
+  password: z.string().min(6, "Le mot de passe doit contenir au moins 6 caractères"),
+});
+
+const signupSchema = loginSchema.extend({
+  name: z.string().min(2, "Le nom doit contenir au moins 2 caractères"),
+  confirmPassword: z.string(),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "Les mots de passe ne correspondent pas",
+  path: ["confirmPassword"],
+});
 
 const Auth = () => {
+  const navigate = useNavigate();
+  const { user, signIn, signUp, isAdmin, isAmbassador, loading } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const [formData, setFormData] = useState({
     name: "",
-    phone: "",
+    email: "",
     password: "",
     confirmPassword: "",
   });
 
+  // Redirect authenticated users based on role
+  useEffect(() => {
+    if (!loading && user) {
+      if (isAdmin) {
+        navigate("/admin");
+      } else if (isAmbassador) {
+        navigate("/ambassadeur");
+      } else {
+        navigate("/mon-compte");
+      }
+    }
+  }, [user, loading, isAdmin, isAmbassador, navigate]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrors({});
     setIsLoading(true);
 
-    // Validate
-    if (!isLogin && formData.password !== formData.confirmPassword) {
-      toast({
-        title: "Erreur",
-        description: "Les mots de passe ne correspondent pas.",
-        variant: "destructive",
-      });
+    try {
+      if (isLogin) {
+        const validated = loginSchema.parse({
+          email: formData.email,
+          password: formData.password,
+        });
+
+        const { error } = await signIn(validated.email, validated.password);
+        
+        if (error) {
+          if (error.message.includes("Invalid login credentials")) {
+            toast({
+              title: "Erreur de connexion",
+              description: "Email ou mot de passe incorrect.",
+              variant: "destructive",
+            });
+          } else {
+            toast({
+              title: "Erreur",
+              description: error.message,
+              variant: "destructive",
+            });
+          }
+        } else {
+          toast({
+            title: "Connexion réussie!",
+            description: "Bienvenue sur VSM Collection.",
+          });
+        }
+      } else {
+        const validated = signupSchema.parse(formData);
+
+        const { error } = await signUp(validated.email, validated.password, validated.name);
+        
+        if (error) {
+          if (error.message.includes("already registered")) {
+            toast({
+              title: "Compte existant",
+              description: "Un compte existe déjà avec cet email. Connectez-vous.",
+              variant: "destructive",
+            });
+          } else {
+            toast({
+              title: "Erreur",
+              description: error.message,
+              variant: "destructive",
+            });
+          }
+        } else {
+          toast({
+            title: "Compte créé!",
+            description: "Vérifiez votre email pour confirmer votre inscription.",
+          });
+          setIsLogin(true);
+        }
+      }
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        const fieldErrors: Record<string, string> = {};
+        error.errors.forEach((err) => {
+          if (err.path[0]) {
+            fieldErrors[err.path[0] as string] = err.message;
+          }
+        });
+        setErrors(fieldErrors);
+      }
+    } finally {
       setIsLoading(false);
-      return;
     }
-
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-
-    toast({
-      title: isLogin ? "Connexion réussie!" : "Compte créé!",
-      description: isLogin
-        ? "Bienvenue sur VSM Collection."
-        : "Vous pouvez maintenant vous connecter.",
-    });
-
-    setIsLoading(false);
-    
-    // In a real app, would redirect to dashboard or handle auth state
   };
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      </div>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-background">
@@ -104,30 +189,34 @@ const Auth = () => {
                       }
                       placeholder="Votre nom"
                       className="pl-10"
-                      required={!isLogin}
                     />
                   </div>
+                  {errors.name && (
+                    <p className="mt-1 text-sm text-destructive">{errors.name}</p>
+                  )}
                 </motion.div>
               )}
 
-              {/* Phone */}
+              {/* Email */}
               <div>
                 <label className="mb-2 block text-sm font-medium">
-                  Numéro de téléphone
+                  Adresse email
                 </label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
                   <Input
-                    type="tel"
-                    value={formData.phone}
+                    type="email"
+                    value={formData.email}
                     onChange={(e) =>
-                      setFormData({ ...formData, phone: e.target.value })
+                      setFormData({ ...formData, email: e.target.value })
                     }
-                    placeholder="+243 ..."
+                    placeholder="votre@email.com"
                     className="pl-10"
-                    required
                   />
                 </div>
+                {errors.email && (
+                  <p className="mt-1 text-sm text-destructive">{errors.email}</p>
+                )}
               </div>
 
               {/* Password */}
@@ -145,7 +234,6 @@ const Auth = () => {
                     }
                     placeholder="••••••••"
                     className="pl-10 pr-10"
-                    required
                   />
                   <button
                     type="button"
@@ -159,6 +247,9 @@ const Auth = () => {
                     )}
                   </button>
                 </div>
+                {errors.password && (
+                  <p className="mt-1 text-sm text-destructive">{errors.password}</p>
+                )}
               </div>
 
               {/* Confirm Password (signup only) */}
@@ -183,9 +274,11 @@ const Auth = () => {
                       }
                       placeholder="••••••••"
                       className="pl-10"
-                      required={!isLogin}
                     />
                   </div>
+                  {errors.confirmPassword && (
+                    <p className="mt-1 text-sm text-destructive">{errors.confirmPassword}</p>
+                  )}
                 </motion.div>
               )}
 
@@ -230,6 +323,16 @@ const Auth = () => {
                 {isLogin ? "S'inscrire" : "Se connecter"}
               </button>
             </p>
+
+            {/* Ambassador Link */}
+            <div className="mt-6 border-t border-border pt-6 text-center">
+              <p className="text-sm text-muted-foreground">
+                Vous êtes influenceur?{" "}
+                <Link to="/devenir-ambassadeur" className="font-medium text-primary hover:underline">
+                  Devenir ambassadeur
+                </Link>
+              </p>
+            </div>
           </motion.div>
         </div>
       </section>

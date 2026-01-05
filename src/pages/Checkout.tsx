@@ -16,7 +16,12 @@ import {
 import { useCart } from "@/context/CartContext";
 import { provinces, kinshasaCommunes } from "@/data/store";
 import { toast } from "@/hooks/use-toast";
-import { Loader2, MessageCircle, Truck, MapPin } from "lucide-react";
+import { Loader2, MessageCircle, Truck, MapPin, Gift, Calendar } from "lucide-react";
+
+// Exchange rate: 1 USD = ~2500 FC (approximate)
+const USD_TO_FC = 2500;
+const FREE_DELIVERY_THRESHOLD_USD = 100;
+const FREE_DELIVERY_THRESHOLD_FC = FREE_DELIVERY_THRESHOLD_USD * USD_TO_FC;
 
 const Checkout = () => {
   const navigate = useNavigate();
@@ -29,8 +34,8 @@ const Checkout = () => {
     province: "",
     city: "",
     commune: "",
+    deliveryDate: "",
     instructions: "",
-    promoCode: "",
   });
 
   const isKinshasa = formData.province === "Kinshasa";
@@ -42,22 +47,35 @@ const Checkout = () => {
     return null;
   }, [isKinshasa, formData.commune]);
 
-  const deliveryFee = useMemo(() => {
-    if (isKinshasa && selectedCommune) {
-      return selectedCommune.deliveryFee;
-    }
-    return 0;
-  }, [isKinshasa, selectedCommune]);
-
   const subtotal = items.reduce(
     (total, item) => total + item.price * item.quantity,
     0
   );
 
-  const totalWithDelivery = getTotal() + deliveryFee;
+  const subtotalAfterDiscount = getTotal();
+
+  // Free delivery if order is over 100 USD (250,000 FC)
+  const isFreeDelivery = subtotalAfterDiscount >= FREE_DELIVERY_THRESHOLD_FC;
+
+  const deliveryFee = useMemo(() => {
+    if (isFreeDelivery) return 0;
+    if (isKinshasa && selectedCommune) {
+      return selectedCommune.deliveryFee;
+    }
+    return 0;
+  }, [isKinshasa, selectedCommune, isFreeDelivery]);
+
+  const totalWithDelivery = subtotalAfterDiscount + deliveryFee;
 
   const formatPrice = (price: number) => {
     return price.toLocaleString("fr-CD") + " FC";
+  };
+
+  // Get minimum delivery date (tomorrow)
+  const getMinDeliveryDate = () => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return tomorrow.toISOString().split("T")[0];
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -99,7 +117,7 @@ const Checkout = () => {
     const productList = items
       .map(
         (item) =>
-          `• ${item.name} x${item.quantity} - ${formatPrice(item.price * item.quantity)}`
+          `• ${item.name}${item.size ? ` (Taille: ${item.size})` : ""}${item.color ? ` (Couleur: ${item.color})` : ""} x${item.quantity} - ${formatPrice(item.price * item.quantity)}`
       )
       .join("\n");
 
@@ -107,15 +125,22 @@ const Checkout = () => {
       ? `📍 Commune: ${formData.commune}, Kinshasa`
       : `📍 ${formData.city}, ${formData.province}`;
 
-    const deliveryInfo = isKinshasa
+    const deliveryInfo = isFreeDelivery
+      ? `🎁 Livraison OFFERTE (commande > ${formatPrice(FREE_DELIVERY_THRESHOLD_FC)})`
+      : isKinshasa
       ? `🚚 Frais de livraison: ${formatPrice(deliveryFee)}`
       : `🚚 Livraison via agence partenaire`;
+
+    const deliveryDateInfo = formData.deliveryDate
+      ? `📅 Date souhaitée: ${new Date(formData.deliveryDate).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}`
+      : "";
 
     const message = encodeURIComponent(
       `🛍️ *NOUVELLE COMMANDE VSM COLLECTION*\n\n` +
         `👤 *Client:* ${formData.fullName}\n` +
         `📞 *Téléphone:* ${formData.phone}\n` +
         `${locationInfo}\n` +
+        `${deliveryDateInfo ? deliveryDateInfo + "\n" : ""}` +
         `${formData.instructions ? `📝 Instructions: ${formData.instructions}\n` : ""}` +
         `\n📦 *ARTICLES:*\n${productList}\n\n` +
         `💰 Sous-total: ${formatPrice(subtotal)}\n` +
@@ -125,8 +150,8 @@ const Checkout = () => {
         `Merci pour votre commande! 🙏`
     );
 
-    // Redirect to WhatsApp
-    const whatsappNumber = "243000000000"; // Replace with actual number
+    // Redirect to WhatsApp with the correct number
+    const whatsappNumber = "243976028479";
     window.open(`https://wa.me/${whatsappNumber}?text=${message}`, "_blank");
 
     clearCart();
@@ -158,6 +183,39 @@ const Checkout = () => {
           >
             Finaliser la commande
           </motion.h1>
+
+          {/* Free Delivery Banner */}
+          {!isFreeDelivery && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-8 flex items-center gap-3 rounded-sm bg-primary/10 p-4"
+            >
+              <Gift className="h-6 w-6 text-primary" />
+              <p className="text-sm">
+                <span className="font-semibold">Livraison offerte</span> pour les commandes supérieures à{" "}
+                <span className="font-bold text-primary">{formatPrice(FREE_DELIVERY_THRESHOLD_FC)}</span>
+                {" "}(~100 USD). Plus que{" "}
+                <span className="font-bold text-primary">
+                  {formatPrice(FREE_DELIVERY_THRESHOLD_FC - subtotalAfterDiscount)}
+                </span>{" "}
+                pour en profiter!
+              </p>
+            </motion.div>
+          )}
+
+          {isFreeDelivery && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="mb-8 flex items-center gap-3 rounded-sm bg-green-500/20 p-4"
+            >
+              <Gift className="h-6 w-6 text-green-500" />
+              <p className="text-sm font-semibold text-green-500">
+                🎉 Félicitations! Vous bénéficiez de la livraison gratuite!
+              </p>
+            </motion.div>
+          )}
 
           <div className="grid gap-8 lg:grid-cols-3">
             {/* Form */}
@@ -250,13 +308,13 @@ const Checkout = () => {
                       <SelectContent>
                         {kinshasaCommunes.map((commune) => (
                           <SelectItem key={commune.name} value={commune.name}>
-                            {commune.name} - {formatPrice(commune.deliveryFee)}
+                            {commune.name} - {isFreeDelivery ? "GRATUIT" : formatPrice(commune.deliveryFee)}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
 
-                    {selectedCommune && (
+                    {selectedCommune && !isFreeDelivery && (
                       <motion.div
                         initial={{ opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: "auto" }}
@@ -298,6 +356,26 @@ const Checkout = () => {
                     </motion.div>
                   </div>
                 ) : null}
+
+                {/* Delivery Date */}
+                <div>
+                  <label className="mb-2 flex items-center gap-2 text-sm font-medium">
+                    <Calendar className="h-4 w-4 text-primary" />
+                    Date de livraison souhaitée
+                  </label>
+                  <Input
+                    type="date"
+                    value={formData.deliveryDate}
+                    onChange={(e) =>
+                      setFormData({ ...formData, deliveryDate: e.target.value })
+                    }
+                    min={getMinDeliveryDate()}
+                    className="w-full"
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Optionnel - Nous ferons de notre mieux pour respecter cette date
+                  </p>
+                </div>
 
                 {/* Instructions */}
                 <div>
@@ -351,7 +429,7 @@ const Checkout = () => {
 
                 <div className="mt-4 space-y-3">
                   {items.map((item) => (
-                    <div key={item.id} className="flex items-center gap-3">
+                    <div key={`${item.id}-${item.size}-${item.color}`} className="flex items-center gap-3">
                       <img
                         src={item.image}
                         alt={item.name}
@@ -359,6 +437,11 @@ const Checkout = () => {
                       />
                       <div className="flex-1">
                         <p className="font-medium">{item.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {item.size && `Taille: ${item.size}`}
+                          {item.size && item.color && " • "}
+                          {item.color && `Couleur: ${item.color}`}
+                        </p>
                         <p className="text-sm text-muted-foreground">
                           x{item.quantity}
                         </p>
@@ -387,10 +470,16 @@ const Checkout = () => {
                     </div>
                   )}
 
-                  {isKinshasa && deliveryFee > 0 && (
+                  {isKinshasa && (
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Livraison</span>
-                      <span>{formatPrice(deliveryFee)}</span>
+                      {isFreeDelivery ? (
+                        <span className="font-semibold text-green-500">OFFERTE</span>
+                      ) : deliveryFee > 0 ? (
+                        <span>{formatPrice(deliveryFee)}</span>
+                      ) : (
+                        <span className="text-muted-foreground">Sélectionnez commune</span>
+                      )}
                     </div>
                   )}
 

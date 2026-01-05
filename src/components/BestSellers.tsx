@@ -1,3 +1,4 @@
+import { forwardRef } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import ProductCard from "./ProductCard";
@@ -5,11 +6,11 @@ import { Button } from "@/components/ui/button";
 import { products } from "@/data/store";
 import { ArrowRight } from "lucide-react";
 
-const BestSellers = () => {
+const BestSellers = forwardRef<HTMLElement>((_, ref) => {
   const bestSellers = products.slice(0, 4);
 
   return (
-    <section className="vsm-section bg-background">
+    <section ref={ref} className="vsm-section bg-background">
       <div className="vsm-container">
         {/* Header */}
         <motion.div
@@ -53,6 +54,8 @@ const BestSellers = () => {
       </div>
     </section>
   );
-};
+});
+
+BestSellers.displayName = "BestSellers";
 
 export default BestSellers;
