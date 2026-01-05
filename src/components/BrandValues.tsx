@@ -1,3 +1,4 @@
+import { forwardRef } from "react";
 import { motion } from "framer-motion";
 import { Globe, Award, Heart, Zap } from "lucide-react";
 
@@ -24,9 +25,9 @@ const values = [
   },
 ];
 
-const BrandValues = () => {
+const BrandValues = forwardRef<HTMLElement>((_, ref) => {
   return (
-    <section className="vsm-section relative overflow-hidden bg-card">
+    <section ref={ref} className="vsm-section relative overflow-hidden bg-card">
       {/* Background Glow */}
       <div className="absolute left-1/2 top-1/2 h-[600px] w-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/5 blur-3xl" />
 
@@ -84,6 +85,8 @@ const BrandValues = () => {
       </div>
     </section>
   );
-};
+});
+
+BrandValues.displayName = "BrandValues";
 
 export default BrandValues;
