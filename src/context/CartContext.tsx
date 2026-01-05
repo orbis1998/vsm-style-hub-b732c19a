@@ -2,11 +2,16 @@ import React, { createContext, useContext, useState, ReactNode } from "react";
 import { CartItem, Product } from "@/types/product";
 import { toast } from "@/hooks/use-toast";
 
+interface AddToCartOptions {
+  size?: string;
+  color?: string;
+}
+
 interface CartContextType {
   items: CartItem[];
-  addItem: (product: Product) => void;
-  removeItem: (productId: string) => void;
-  updateQuantity: (productId: string, quantity: number) => void;
+  addItem: (product: Product, options?: AddToCartOptions) => void;
+  removeItem: (productId: string, size?: string, color?: string) => void;
+  updateQuantity: (productId: string, quantity: number, size?: string, color?: string) => void;
   clearCart: () => void;
   getTotal: () => number;
   getItemCount: () => number;
@@ -18,41 +23,59 @@ interface CartContextType {
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
+const getItemKey = (productId: string, size?: string, color?: string) => {
+  return `${productId}-${size || ''}-${color || ''}`;
+};
+
 export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [items, setItems] = useState<CartItem[]>([]);
   const [promoCode, setPromoCode] = useState<string | null>(null);
   const [promoDiscount, setPromoDiscount] = useState<number>(0);
 
-  const addItem = (product: Product) => {
+  const addItem = (product: Product, options?: AddToCartOptions) => {
+    const size = options?.size;
+    const color = options?.color;
+    
     setItems((prevItems) => {
-      const existingItem = prevItems.find((item) => item.id === product.id);
+      const existingItem = prevItems.find(
+        (item) => item.id === product.id && item.size === size && item.color === color
+      );
+      
       if (existingItem) {
         return prevItems.map((item) =>
-          item.id === product.id
+          item.id === product.id && item.size === size && item.color === color
             ? { ...item, quantity: item.quantity + 1 }
             : item
         );
       }
-      return [...prevItems, { ...product, quantity: 1 }];
+      
+      return [...prevItems, { ...product, quantity: 1, size, color }];
     });
+    
     toast({
       title: "Ajouté au panier",
-      description: `${product.name} a été ajouté à votre panier.`,
+      description: `${product.name}${size ? ` (${size})` : ''}${color ? ` - ${color}` : ''} a été ajouté à votre panier.`,
     });
   };
 
-  const removeItem = (productId: string) => {
-    setItems((prevItems) => prevItems.filter((item) => item.id !== productId));
+  const removeItem = (productId: string, size?: string, color?: string) => {
+    setItems((prevItems) => 
+      prevItems.filter((item) => 
+        !(item.id === productId && item.size === size && item.color === color)
+      )
+    );
   };
 
-  const updateQuantity = (productId: string, quantity: number) => {
+  const updateQuantity = (productId: string, quantity: number, size?: string, color?: string) => {
     if (quantity <= 0) {
-      removeItem(productId);
+      removeItem(productId, size, color);
       return;
     }
     setItems((prevItems) =>
       prevItems.map((item) =>
-        item.id === productId ? { ...item, quantity } : item
+        item.id === productId && item.size === size && item.color === color
+          ? { ...item, quantity }
+          : item
       )
     );
   };

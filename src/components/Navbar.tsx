@@ -1,9 +1,10 @@
 import { Link, useLocation } from "react-router-dom";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X, ShoppingBag, User } from "lucide-react";
+import { Menu, X, ShoppingBag, User, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCart } from "@/context/CartContext";
+import { useAuth } from "@/hooks/useAuth";
 
 const navLinks = [
   { name: "Accueil", path: "/" },
@@ -16,17 +17,26 @@ const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
   const { getItemCount } = useCart();
+  const { user, signOut, isAdmin, isAmbassador } = useAuth();
   const itemCount = getItemCount();
+
+  const getDashboardLink = () => {
+    if (isAdmin) return "/admin";
+    if (isAmbassador) return "/ambassadeur";
+    return "/mon-compte";
+  };
 
   return (
     <header className="fixed left-0 right-0 top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-lg">
       <nav className="vsm-container flex h-16 items-center justify-between md:h-20">
-        {/* Logo */}
+        {/* Logo - Space reserved for logo upload */}
         <Link to="/" className="relative z-50">
-          <h1 className="font-display text-2xl font-bold tracking-wider md:text-3xl">
-            <span className="text-primary">VSM</span>
-            <span className="text-foreground"> Collection</span>
-          </h1>
+          <div className="h-10 w-32 md:h-12 md:w-40">
+            {/* Logo placeholder - will be replaced */}
+            <h1 className="font-display text-2xl font-bold tracking-wider md:text-3xl">
+              <span className="text-primary">VSM</span>
+            </h1>
+          </div>
         </Link>
 
         {/* Desktop Navigation */}
@@ -59,12 +69,26 @@ const Navbar = () => {
             </Button>
           </Link>
 
-          <Link to="/connexion" className="hidden md:block">
-            <Button variant="outline" size="sm" className="gap-2">
-              <User className="h-4 w-4" />
-              Connexion
-            </Button>
-          </Link>
+          {user ? (
+            <div className="hidden items-center gap-2 md:flex">
+              <Link to={getDashboardLink()}>
+                <Button variant="outline" size="sm" className="gap-2">
+                  <User className="h-4 w-4" />
+                  Mon compte
+                </Button>
+              </Link>
+              <Button variant="ghost" size="icon" onClick={signOut}>
+                <LogOut className="h-4 w-4" />
+              </Button>
+            </div>
+          ) : (
+            <Link to="/connexion" className="hidden md:block">
+              <Button variant="outline" size="sm" className="gap-2">
+                <User className="h-4 w-4" />
+                Connexion
+              </Button>
+            </Link>
+          )}
 
           {/* Mobile Menu Toggle */}
           <Button
@@ -114,12 +138,35 @@ const Navbar = () => {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.4 }}
               >
-                <Link to="/connexion" onClick={() => setIsOpen(false)}>
-                  <Button variant="default" size="lg" className="mt-4 gap-2">
-                    <User className="h-5 w-5" />
-                    Connexion
-                  </Button>
-                </Link>
+                {user ? (
+                  <div className="flex flex-col items-center gap-4">
+                    <Link to={getDashboardLink()} onClick={() => setIsOpen(false)}>
+                      <Button variant="default" size="lg" className="gap-2">
+                        <User className="h-5 w-5" />
+                        Mon compte
+                      </Button>
+                    </Link>
+                    <Button
+                      variant="ghost"
+                      size="lg"
+                      className="gap-2"
+                      onClick={() => {
+                        signOut();
+                        setIsOpen(false);
+                      }}
+                    >
+                      <LogOut className="h-5 w-5" />
+                      Déconnexion
+                    </Button>
+                  </div>
+                ) : (
+                  <Link to="/connexion" onClick={() => setIsOpen(false)}>
+                    <Button variant="default" size="lg" className="mt-4 gap-2">
+                      <User className="h-5 w-5" />
+                      Connexion
+                    </Button>
+                  </Link>
+                )}
               </motion.div>
             </div>
           </motion.div>

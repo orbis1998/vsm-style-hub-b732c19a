@@ -1,8 +1,9 @@
 import { motion } from "framer-motion";
+import { Link } from "react-router-dom";
 import { Product } from "@/types/product";
 import { Button } from "@/components/ui/button";
 import { useCart } from "@/context/CartContext";
-import { ShoppingBag } from "lucide-react";
+import { ShoppingBag, Eye } from "lucide-react";
 
 interface ProductCardProps {
   product: Product;
@@ -25,7 +26,7 @@ const ProductCard = ({ product, index = 0 }: ProductCardProps) => {
       className="vsm-card group"
     >
       {/* Image */}
-      <div className="relative aspect-[3/4] overflow-hidden">
+      <Link to={`/produit/${product.id}`} className="relative block aspect-[3/4] overflow-hidden">
         <img
           src={product.image}
           alt={product.name}
@@ -39,36 +40,46 @@ const ProductCard = ({ product, index = 0 }: ProductCardProps) => {
           </div>
         )}
 
-        {/* Quick Add Overlay */}
-        <div className="absolute inset-0 flex items-end justify-center bg-gradient-to-t from-background/80 via-transparent to-transparent p-4 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-          <Button
-            variant="cart"
-            className="w-full gap-2"
-            onClick={() => addItem(product)}
-          >
-            <ShoppingBag className="h-4 w-4" />
-            Ajouter au panier
-          </Button>
+        {/* Hover Overlay */}
+        <div className="absolute inset-0 flex items-center justify-center bg-background/60 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+          <span className="flex items-center gap-2 rounded-sm bg-primary px-4 py-2 font-display text-sm font-semibold text-primary-foreground">
+            <Eye className="h-4 w-4" />
+            Voir le produit
+          </span>
         </div>
-      </div>
+      </Link>
 
       {/* Info */}
       <div className="space-y-2 p-4">
-        <h3 className="font-display text-lg font-semibold uppercase tracking-wide">
-          {product.name}
-        </h3>
+        <Link to={`/produit/${product.id}`}>
+          <h3 className="font-display text-lg font-semibold uppercase tracking-wide hover:text-primary">
+            {product.name}
+          </h3>
+        </Link>
         <p className="text-sm text-muted-foreground line-clamp-2">
           {product.description}
         </p>
-        <div className="flex items-center gap-2 pt-1">
-          <span className="font-display text-xl font-bold text-primary">
-            {formatPrice(product.price)}
-          </span>
-          {product.originalPrice && (
-            <span className="vsm-price-strike text-sm">
-              {formatPrice(product.originalPrice)}
+        <div className="flex items-center justify-between gap-2 pt-2">
+          <div className="flex items-center gap-2">
+            <span className="font-display text-xl font-bold text-primary">
+              {formatPrice(product.price)}
             </span>
-          )}
+            {product.originalPrice && (
+              <span className="vsm-price-strike text-sm">
+                {formatPrice(product.originalPrice)}
+              </span>
+            )}
+          </div>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={(e) => {
+              e.preventDefault();
+              addItem(product);
+            }}
+          >
+            <ShoppingBag className="h-4 w-4" />
+          </Button>
         </div>
       </div>
     </motion.div>
