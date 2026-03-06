@@ -16,225 +16,196 @@ export type Database = {
     Tables: {
       ambassador_applications: {
         Row: {
-          created_at: string
-          email: string
-          facebook_handle: string | null
-          followers_count: number | null
+          created_at: string | null
           full_name: string
-          id: string
-          instagram_handle: string | null
+          id: number
+          main_platform: string
           motivation: string
           phone: string
-          reviewed_at: string | null
-          reviewed_by: string | null
-          status: Database["public"]["Enums"]["ambassador_status"]
-          tiktok_handle: string | null
-          user_id: string | null
+          profile_url: string | null
+          status: string
+          username: string
         }
         Insert: {
-          created_at?: string
-          email: string
-          facebook_handle?: string | null
-          followers_count?: number | null
+          created_at?: string | null
           full_name: string
-          id?: string
-          instagram_handle?: string | null
+          id?: number
+          main_platform: string
           motivation: string
           phone: string
-          reviewed_at?: string | null
-          reviewed_by?: string | null
-          status?: Database["public"]["Enums"]["ambassador_status"]
-          tiktok_handle?: string | null
-          user_id?: string | null
+          profile_url?: string | null
+          status?: string
+          username: string
         }
         Update: {
-          created_at?: string
-          email?: string
-          facebook_handle?: string | null
-          followers_count?: number | null
+          created_at?: string | null
           full_name?: string
-          id?: string
-          instagram_handle?: string | null
+          id?: number
+          main_platform?: string
           motivation?: string
           phone?: string
-          reviewed_at?: string | null
-          reviewed_by?: string | null
-          status?: Database["public"]["Enums"]["ambassador_status"]
-          tiktok_handle?: string | null
-          user_id?: string | null
+          profile_url?: string | null
+          status?: string
+          username?: string
         }
         Relationships: []
       }
-      collections: {
+      ambassador_clicks: {
         Row: {
-          created_at: string
-          description: string | null
-          id: string
-          image_url: string | null
-          is_active: boolean
-          name: string
-          slug: string
-          updated_at: string
+          clicked_at: string | null
+          id: number
+          link_id: number
+          product_id: number | null
+          referrer: string | null
+          user_agent: string | null
         }
         Insert: {
-          created_at?: string
-          description?: string | null
-          id?: string
-          image_url?: string | null
-          is_active?: boolean
-          name: string
-          slug: string
-          updated_at?: string
+          clicked_at?: string | null
+          id?: number
+          link_id: number
+          product_id?: number | null
+          referrer?: string | null
+          user_agent?: string | null
         }
         Update: {
-          created_at?: string
-          description?: string | null
-          id?: string
-          image_url?: string | null
-          is_active?: boolean
-          name?: string
-          slug?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      delivery_fees: {
-        Row: {
-          commune: string
-          created_at: string
-          fee: number
-          id: string
-          updated_at: string
-          zone: string
-        }
-        Insert: {
-          commune: string
-          created_at?: string
-          fee: number
-          id?: string
-          updated_at?: string
-          zone: string
-        }
-        Update: {
-          commune?: string
-          created_at?: string
-          fee?: number
-          id?: string
-          updated_at?: string
-          zone?: string
-        }
-        Relationships: []
-      }
-      order_items: {
-        Row: {
-          color: string | null
-          created_at: string
-          id: string
-          order_id: string
-          product_id: string | null
-          product_name: string
-          product_price: number
-          quantity: number
-          size: string | null
-        }
-        Insert: {
-          color?: string | null
-          created_at?: string
-          id?: string
-          order_id: string
-          product_id?: string | null
-          product_name: string
-          product_price: number
-          quantity: number
-          size?: string | null
-        }
-        Update: {
-          color?: string | null
-          created_at?: string
-          id?: string
-          order_id?: string
-          product_id?: string | null
-          product_name?: string
-          product_price?: number
-          quantity?: number
-          size?: string | null
+          clicked_at?: string | null
+          id?: number
+          link_id?: number
+          product_id?: number | null
+          referrer?: string | null
+          user_agent?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "order_items_order_id_fkey"
-            columns: ["order_id"]
+            foreignKeyName: "ambassador_clicks_link_id_fkey"
+            columns: ["link_id"]
             isOneToOne: false
-            referencedRelation: "orders"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "order_items_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "products"
+            referencedRelation: "ambassador_links"
             referencedColumns: ["id"]
           },
         ]
       }
-      orders: {
+      ambassador_links: {
+        Row: {
+          active: boolean
+          ambassador_id: string
+          created_at: string | null
+          id: number
+          promo_code_id: number | null
+          slug: string
+          target_product_id: number | null
+          target_type: string
+        }
+        Insert: {
+          active?: boolean
+          ambassador_id: string
+          created_at?: string | null
+          id?: number
+          promo_code_id?: number | null
+          slug: string
+          target_product_id?: number | null
+          target_type: string
+        }
+        Update: {
+          active?: boolean
+          ambassador_id?: string
+          created_at?: string | null
+          id?: number
+          promo_code_id?: number | null
+          slug?: string
+          target_product_id?: number | null
+          target_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ambassador_links_ambassador_id_fkey"
+            columns: ["ambassador_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ambassador_links_promo_code_id_fkey"
+            columns: ["promo_code_id"]
+            isOneToOne: false
+            referencedRelation: "promo_codes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      delivery_zones: {
         Row: {
           city: string | null
-          commune: string | null
-          created_at: string
-          delivery_date: string | null
-          delivery_fee: number
-          delivery_instructions: string | null
-          discount: number
-          full_name: string
-          id: string
-          phone: string
-          promo_code_id: string | null
-          province: string
-          status: string
-          subtotal: number
-          total: number
-          tracking_link_id: string | null
-          user_id: string | null
+          id: number
+          is_active: boolean
+          name: string
+          price: number | null
         }
         Insert: {
           city?: string | null
-          commune?: string | null
-          created_at?: string
-          delivery_date?: string | null
-          delivery_fee?: number
-          delivery_instructions?: string | null
-          discount?: number
-          full_name: string
-          id?: string
-          phone: string
-          promo_code_id?: string | null
-          province: string
-          status?: string
-          subtotal: number
-          total: number
-          tracking_link_id?: string | null
-          user_id?: string | null
+          id?: number
+          is_active?: boolean
+          name: string
+          price?: number | null
         }
         Update: {
           city?: string | null
-          commune?: string | null
-          created_at?: string
-          delivery_date?: string | null
-          delivery_fee?: number
-          delivery_instructions?: string | null
-          discount?: number
-          full_name?: string
-          id?: string
-          phone?: string
-          promo_code_id?: string | null
-          province?: string
+          id?: number
+          is_active?: boolean
+          name?: string
+          price?: number | null
+        }
+        Relationships: []
+      }
+      orders: {
+        Row: {
+          ambassador_id: string | null
+          created_at: string | null
+          customer_id: string | null
+          id: number
+          promo_code_id: number | null
+          source_link_id: number | null
+          status: string
+          total_amount: number
+          user_id: string | null
+        }
+        Insert: {
+          ambassador_id?: string | null
+          created_at?: string | null
+          customer_id?: string | null
+          id?: number
+          promo_code_id?: number | null
+          source_link_id?: number | null
+          status: string
+          total_amount: number
+          user_id?: string | null
+        }
+        Update: {
+          ambassador_id?: string | null
+          created_at?: string | null
+          customer_id?: string | null
+          id?: number
+          promo_code_id?: number | null
+          source_link_id?: number | null
           status?: string
-          subtotal?: number
-          total?: number
-          tracking_link_id?: string | null
+          total_amount?: number
           user_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "orders_ambassador_id_fkey"
+            columns: ["ambassador_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "orders_promo_code_id_fkey"
             columns: ["promo_code_id"]
@@ -243,201 +214,169 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "orders_tracking_link_id_fkey"
-            columns: ["tracking_link_id"]
+            foreignKeyName: "orders_source_link_id_fkey"
+            columns: ["source_link_id"]
             isOneToOne: false
-            referencedRelation: "tracking_links"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      product_images: {
-        Row: {
-          created_at: string
-          id: string
-          image_url: string
-          is_primary: boolean
-          product_id: string
-          sort_order: number
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          image_url: string
-          is_primary?: boolean
-          product_id: string
-          sort_order?: number
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          image_url?: string
-          is_primary?: boolean
-          product_id?: string
-          sort_order?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "product_images_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "products"
+            referencedRelation: "ambassador_links"
             referencedColumns: ["id"]
           },
         ]
       }
       products: {
         Row: {
-          badge: string | null
-          category: string
-          collection_id: string | null
-          colors: string[] | null
+          category: string | null
           created_at: string
           description: string | null
-          id: string
+          id: number
+          image_url: string | null
+          images: string[] | null
           is_active: boolean
           name: string
-          original_price: number | null
-          price: number
-          sizes: string[] | null
-          updated_at: string
+          price: number | null
+          sku: string | null
+          stock: number | null
+          updated_at: string | null
         }
         Insert: {
-          badge?: string | null
-          category: string
-          collection_id?: string | null
-          colors?: string[] | null
+          category?: string | null
           created_at?: string
           description?: string | null
-          id?: string
+          id?: number
+          image_url?: string | null
+          images?: string[] | null
           is_active?: boolean
           name: string
-          original_price?: number | null
-          price: number
-          sizes?: string[] | null
-          updated_at?: string
+          price?: number | null
+          sku?: string | null
+          stock?: number | null
+          updated_at?: string | null
         }
         Update: {
-          badge?: string | null
-          category?: string
-          collection_id?: string | null
-          colors?: string[] | null
+          category?: string | null
           created_at?: string
           description?: string | null
-          id?: string
+          id?: number
+          image_url?: string | null
+          images?: string[] | null
           is_active?: boolean
           name?: string
-          original_price?: number | null
-          price?: number
-          sizes?: string[] | null
-          updated_at?: string
+          price?: number | null
+          sku?: string | null
+          stock?: number | null
+          updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "products_collection_id_fkey"
-            columns: ["collection_id"]
-            isOneToOne: false
-            referencedRelation: "collections"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       profiles: {
         Row: {
-          avatar_url: string | null
-          created_at: string
+          created_at: string | null
+          email: string | null
+          email_verified: boolean | null
           full_name: string | null
           id: string
+          name: string | null
           phone: string | null
-          updated_at: string
-          user_id: string
+          phone_verified: boolean | null
+          role: string
+          updated_at: string | null
         }
         Insert: {
-          avatar_url?: string | null
-          created_at?: string
+          created_at?: string | null
+          email?: string | null
+          email_verified?: boolean | null
           full_name?: string | null
-          id?: string
+          id: string
+          name?: string | null
           phone?: string | null
-          updated_at?: string
-          user_id: string
+          phone_verified?: boolean | null
+          role?: string
+          updated_at?: string | null
         }
         Update: {
-          avatar_url?: string | null
-          created_at?: string
+          created_at?: string | null
+          email?: string | null
+          email_verified?: boolean | null
           full_name?: string | null
           id?: string
+          name?: string | null
           phone?: string | null
-          updated_at?: string
-          user_id?: string
+          phone_verified?: boolean | null
+          role?: string
+          updated_at?: string | null
         }
         Relationships: []
       }
       promo_codes: {
         Row: {
+          active: boolean
           ambassador_id: string | null
           code: string
-          created_at: string
-          discount_fixed: number | null
-          discount_percent: number | null
-          id: string
-          is_active: boolean
+          created_at: string | null
+          description: string | null
+          discount_type: string
+          discount_value: number
+          id: number
+          is_global: boolean
           max_usage: number | null
           usage_count: number
-          valid_until: string | null
+          valid_from: string | null
+          valid_to: string | null
         }
         Insert: {
+          active?: boolean
           ambassador_id?: string | null
           code: string
-          created_at?: string
-          discount_fixed?: number | null
-          discount_percent?: number | null
-          id?: string
-          is_active?: boolean
+          created_at?: string | null
+          description?: string | null
+          discount_type: string
+          discount_value: number
+          id?: number
+          is_global?: boolean
           max_usage?: number | null
           usage_count?: number
-          valid_until?: string | null
+          valid_from?: string | null
+          valid_to?: string | null
         }
         Update: {
+          active?: boolean
           ambassador_id?: string | null
           code?: string
-          created_at?: string
-          discount_fixed?: number | null
-          discount_percent?: number | null
-          id?: string
-          is_active?: boolean
+          created_at?: string | null
+          description?: string | null
+          discount_type?: string
+          discount_value?: number
+          id?: number
+          is_global?: boolean
           max_usage?: number | null
           usage_count?: number
-          valid_until?: string | null
+          valid_from?: string | null
+          valid_to?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "promo_codes_ambassador_id_fkey"
+            columns: ["ambassador_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
-      tracking_links: {
+      settings: {
         Row: {
-          ambassador_id: string
-          clicks: number
-          code: string
-          conversions: number
-          created_at: string
-          id: string
-          revenue: number
+          description: string | null
+          key: string
+          value: string | null
         }
         Insert: {
-          ambassador_id: string
-          clicks?: number
-          code: string
-          conversions?: number
-          created_at?: string
-          id?: string
-          revenue?: number
+          description?: string | null
+          key: string
+          value?: string | null
         }
         Update: {
-          ambassador_id?: string
-          clicks?: number
-          code?: string
-          conversions?: number
-          created_at?: string
-          id?: string
-          revenue?: number
+          description?: string | null
+          key?: string
+          value?: string | null
         }
         Relationships: []
       }
@@ -445,19 +384,19 @@ export type Database = {
         Row: {
           created_at: string
           id: string
-          role: Database["public"]["Enums"]["app_role"]
+          role: string
           user_id: string
         }
         Insert: {
           created_at?: string
           id?: string
-          role?: Database["public"]["Enums"]["app_role"]
+          role: string
           user_id: string
         }
         Update: {
           created_at?: string
           id?: string
-          role?: Database["public"]["Enums"]["app_role"]
+          role?: string
           user_id?: string
         }
         Relationships: []
@@ -467,17 +406,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      has_role: {
-        Args: {
-          _role: Database["public"]["Enums"]["app_role"]
-          _user_id: string
-        }
-        Returns: boolean
-      }
+      is_admin: { Args: never; Returns: boolean }
     }
     Enums: {
-      ambassador_status: "pending" | "approved" | "rejected"
-      app_role: "admin" | "client" | "ambassador"
+      [_ in never]: never
     }
     CompositeTypes: {
       [_ in never]: never
@@ -604,9 +536,6 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {
-      ambassador_status: ["pending", "approved", "rejected"],
-      app_role: ["admin", "client", "ambassador"],
-    },
+    Enums: {},
   },
 } as const
