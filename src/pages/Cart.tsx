@@ -30,9 +30,9 @@ const Cart = () => {
     0
   );
 
-  const handleApplyPromo = () => {
+  const handleApplyPromo = async () => {
     if (promoInput.trim()) {
-      applyPromoCode(promoInput.trim());
+      await applyPromoCode(promoInput.trim());
       setPromoInput("");
     }
   };
