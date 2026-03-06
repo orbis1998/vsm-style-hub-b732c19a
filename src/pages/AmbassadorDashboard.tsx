@@ -18,19 +18,18 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 
 interface TrackingLink {
-  id: string;
-  code: string;
-  clicks: number;
-  conversions: number;
-  revenue: number;
-  created_at: string;
+  id: number;
+  slug: string;
+  target_type: string;
+  active: boolean;
+  created_at: string | null;
 }
 
 interface PromoCode {
-  id: string;
+  id: number;
   code: string;
-  discount_percent: number | null;
-  discount_fixed: number | null;
+  discount_type: string;
+  discount_value: number;
   usage_count: number;
 }
 
@@ -66,7 +65,7 @@ const AmbassadorDashboard = () => {
 
     const [linksResult, codesResult] = await Promise.all([
       supabase
-        .from("tracking_links")
+        .from("ambassador_links")
         .select("*")
         .eq("ambassador_id", user.id)
         .order("created_at", { ascending: false }),
@@ -76,8 +75,8 @@ const AmbassadorDashboard = () => {
         .eq("ambassador_id", user.id),
     ]);
 
-    if (linksResult.data) setTrackingLinks(linksResult.data);
-    if (codesResult.data) setPromoCodes(codesResult.data);
+    if (linksResult.data) setTrackingLinks(linksResult.data as unknown as TrackingLink[]);
+    if (codesResult.data) setPromoCodes(codesResult.data as unknown as PromoCode[]);
   };
 
   const createTrackingLink = async () => {
@@ -85,9 +84,10 @@ const AmbassadorDashboard = () => {
 
     setIsCreating(true);
     try {
-      const { error } = await supabase.from("tracking_links").insert({
+      const { error } = await supabase.from("ambassador_links").insert({
         ambassador_id: user.id,
-        code: newLinkCode.toUpperCase().replace(/\s/g, ""),
+        slug: newLinkCode.toUpperCase().replace(/\s/g, ""),
+        target_type: "shop",
       });
 
       if (error) throw error;
@@ -121,10 +121,10 @@ const AmbassadorDashboard = () => {
     return price.toLocaleString("fr-CD") + " FC";
   };
 
-  const totalClicks = trackingLinks.reduce((sum, link) => sum + link.clicks, 0);
-  const totalConversions = trackingLinks.reduce((sum, link) => sum + link.conversions, 0);
-  const totalRevenue = trackingLinks.reduce((sum, link) => sum + link.revenue, 0);
-  const conversionRate = totalClicks > 0 ? ((totalConversions / totalClicks) * 100).toFixed(1) : "0";
+  const totalClicks = 0; // clicks tracked via ambassador_clicks table
+  const totalConversions = 0;
+  const totalRevenue = 0;
+  const conversionRate = "0";
 
   if (loading) {
     return (
@@ -220,11 +220,9 @@ const AmbassadorDashboard = () => {
                     <div>
                       <p className="font-display text-xl font-bold text-primary">{code.code}</p>
                       <p className="text-sm text-muted-foreground">
-                        {code.discount_percent
-                          ? `-${code.discount_percent}%`
-                          : code.discount_fixed
-                          ? `-${formatPrice(code.discount_fixed)}`
-                          : ""}
+                        {code.discount_type === "percent"
+                          ? `-${code.discount_value}%`
+                          : `-${formatPrice(code.discount_value)}`}
                         {" • "}{code.usage_count} utilisations
                       </p>
                     </div>
@@ -286,17 +284,17 @@ const AmbassadorDashboard = () => {
                   </thead>
                   <tbody>
                     {trackingLinks.map((link) => {
-                      const fullLink = `https://vsmcollection.com/?ref=${link.code}`;
+                      const fullLink = `https://vsmcollection.com/?ref=${link.slug}`;
                       return (
                         <tr key={link.id} className="border-b border-border last:border-0">
                           <td className="px-4 py-4">
-                            <p className="font-medium text-primary">{link.code}</p>
+                            <p className="font-medium text-primary">{link.slug}</p>
                             <p className="text-xs text-muted-foreground">{fullLink}</p>
                           </td>
-                          <td className="px-4 py-4 text-center">{link.clicks}</td>
-                          <td className="px-4 py-4 text-center">{link.conversions}</td>
+                          <td className="px-4 py-4 text-center">—</td>
+                          <td className="px-4 py-4 text-center">—</td>
                           <td className="px-4 py-4 text-right font-semibold text-green-500">
-                            {formatPrice(link.revenue)}
+                            —
                           </td>
                           <td className="px-4 py-4 text-right">
                             <Button
