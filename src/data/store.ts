@@ -1,6 +1,6 @@
-import { Product } from "@/types/product";
+// Static data - hero slides and location data only
+// Products and promo codes now come from Supabase
 
-// Product images - to be replaced with real images
 import hero1 from "@/assets/hero-1.jpg";
 import hero2 from "@/assets/hero-2.jpg";
 import hero3 from "@/assets/hero-3.jpg";
@@ -26,89 +26,7 @@ export const heroSlides = [
   },
 ];
 
-export const products: Product[] = [
-  {
-    id: "1",
-    name: "VSM Classic Hoodie",
-    description: "Hoodie premium en coton bio, coupe oversize",
-    price: 89000,
-    originalPrice: 120000,
-    image: hero1,
-    images: [hero1, hero2, hero3],
-    category: "hoodies",
-    badge: "-26%",
-    inStock: true,
-    sizes: ["S", "M", "L", "XL", "XXL"],
-    colors: ["Noir", "Rouge", "Blanc"],
-  },
-  {
-    id: "2",
-    name: "VSM Tracksuit Red Line",
-    description: "Ensemble survêtement avec bandes signature VSM",
-    price: 145000,
-    image: hero2,
-    images: [hero2, hero1, hero3],
-    category: "ensembles",
-    inStock: true,
-    sizes: ["S", "M", "L", "XL"],
-    colors: ["Noir/Rouge", "Rouge/Blanc"],
-  },
-  {
-    id: "3",
-    name: "VSM Urban Tee",
-    description: "T-shirt streetwear avec logo brodé",
-    price: 45000,
-    originalPrice: 55000,
-    image: hero3,
-    images: [hero3, hero1, hero2],
-    category: "t-shirts",
-    badge: "-18%",
-    inStock: true,
-    sizes: ["S", "M", "L", "XL", "XXL"],
-    colors: ["Noir", "Blanc", "Rouge", "Gris"],
-  },
-  {
-    id: "4",
-    name: "VSM Cargo Pants",
-    description: "Pantalon cargo coupe relaxed, multi-poches",
-    price: 78000,
-    image: hero1,
-    images: [hero1, hero2],
-    category: "pantalons",
-    inStock: true,
-    sizes: ["S", "M", "L", "XL"],
-    colors: ["Noir", "Kaki", "Beige"],
-  },
-  {
-    id: "5",
-    name: "VSM Cap Elite",
-    description: "Casquette brodée édition limitée",
-    price: 35000,
-    originalPrice: 45000,
-    image: hero2,
-    images: [hero2, hero3],
-    category: "accessoires",
-    badge: "-22%",
-    inStock: true,
-    colors: ["Noir", "Rouge", "Blanc"],
-  },
-  {
-    id: "6",
-    name: "VSM Bomber Jacket",
-    description: "Veste bomber premium, finitions luxe",
-    price: 195000,
-    image: hero3,
-    images: [hero3, hero1, hero2],
-    category: "vestes",
-    badge: "NEW",
-    inStock: true,
-    sizes: ["S", "M", "L", "XL"],
-    colors: ["Noir", "Bordeaux"],
-  },
-];
-
-// Kinshasa communes with delivery zones based on distance from Ngiri-Ngiri
-// Updated fees: 8,000 FC to 15,000 FC
+// Kinshasa communes with delivery zones
 export const kinshasaCommunes: { name: string; zone: "proche" | "moyenne" | "eloignee"; deliveryFee: number }[] = [
   { name: "Ngiri-Ngiri", zone: "proche", deliveryFee: 8000 },
   { name: "Kalamu", zone: "proche", deliveryFee: 8000 },
@@ -137,36 +55,9 @@ export const kinshasaCommunes: { name: string; zone: "proche" | "moyenne" | "elo
 ];
 
 export const provinces = [
-  "Kinshasa",
-  "Kongo-Central",
-  "Kwango",
-  "Kwilu",
-  "Mai-Ndombe",
-  "Équateur",
-  "Mongala",
-  "Nord-Ubangi",
-  "Sud-Ubangi",
-  "Tshuapa",
-  "Kasaï",
-  "Kasaï-Central",
-  "Kasaï-Oriental",
-  "Lomami",
-  "Sankuru",
-  "Haut-Katanga",
-  "Haut-Lomami",
-  "Lualaba",
-  "Tanganyika",
-  "Maniema",
-  "Nord-Kivu",
-  "Sud-Kivu",
-  "Bas-Uele",
-  "Haut-Uele",
-  "Ituri",
-  "Tshopo",
-];
-
-export const promoCodes: { code: string; discount: number; type: "percent" | "fixed" }[] = [
-  { code: "VSM10", discount: 10, type: "percent" },
-  { code: "BIENVENUE", discount: 15, type: "percent" },
-  { code: "FLASH5000", discount: 5000, type: "fixed" },
+  "Kinshasa", "Kongo-Central", "Kwango", "Kwilu", "Mai-Ndombe",
+  "Équateur", "Mongala", "Nord-Ubangi", "Sud-Ubangi", "Tshuapa",
+  "Kasaï", "Kasaï-Central", "Kasaï-Oriental", "Lomami", "Sankuru",
+  "Haut-Katanga", "Haut-Lomami", "Lualaba", "Tanganyika",
+  "Maniema", "Nord-Kivu", "Sud-Kivu", "Bas-Uele", "Haut-Uele", "Ituri", "Tshopo",
 ];
