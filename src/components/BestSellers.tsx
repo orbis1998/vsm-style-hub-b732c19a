@@ -3,16 +3,16 @@ import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import ProductCard from "./ProductCard";
 import { Button } from "@/components/ui/button";
-import { products } from "@/data/store";
-import { ArrowRight } from "lucide-react";
+import { useProducts } from "@/hooks/useProducts";
+import { ArrowRight, Loader2 } from "lucide-react";
 
 const BestSellers = forwardRef<HTMLElement>((_, ref) => {
-  const bestSellers = products.slice(0, 4);
+  const { data: products, isLoading } = useProducts();
+  const bestSellers = (products || []).slice(0, 4);
 
   return (
     <section ref={ref} className="vsm-section bg-background">
       <div className="vsm-container">
-        {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -30,14 +30,20 @@ const BestSellers = forwardRef<HTMLElement>((_, ref) => {
           </p>
         </motion.div>
 
-        {/* Products Grid */}
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          {bestSellers.map((product, index) => (
-            <ProductCard key={product.id} product={product} index={index} />
-          ))}
-        </div>
+        {isLoading ? (
+          <div className="flex justify-center py-20">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        ) : bestSellers.length === 0 ? (
+          <p className="text-center text-muted-foreground py-20">Aucun produit disponible.</p>
+        ) : (
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            {bestSellers.map((product, index) => (
+              <ProductCard key={product.id} product={product} index={index} />
+            ))}
+          </div>
+        )}
 
-        {/* CTA */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}

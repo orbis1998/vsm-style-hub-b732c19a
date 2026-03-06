@@ -3,8 +3,9 @@ import { motion } from "framer-motion";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import ProductCard from "@/components/ProductCard";
-import { products } from "@/data/store";
+import { useProducts } from "@/hooks/useProducts";
 import { Button } from "@/components/ui/button";
+import { Loader2 } from "lucide-react";
 
 const categories = [
   { id: "all", name: "Tout" },
@@ -18,17 +19,17 @@ const categories = [
 
 const Boutique = () => {
   const [activeCategory, setActiveCategory] = useState("all");
+  const { data: products, isLoading } = useProducts();
 
   const filteredProducts =
     activeCategory === "all"
-      ? products
-      : products.filter((p) => p.category === activeCategory);
+      ? products || []
+      : (products || []).filter((p) => p.category === activeCategory);
 
   return (
     <main className="min-h-screen bg-background">
       <Navbar />
 
-      {/* Hero */}
       <section className="pb-12 pt-32 md:pt-40">
         <div className="vsm-container">
           <motion.div
@@ -43,14 +44,13 @@ const Boutique = () => {
               Boutique
             </h1>
             <p className="mx-auto mt-4 max-w-2xl text-muted-foreground">
-              Explorez notre collection complète de streetwear premium. 
+              Explorez notre collection complète de streetwear premium.
               Chaque pièce est conçue pour ceux qui vivent avec style.
             </p>
           </motion.div>
         </div>
       </section>
 
-      {/* Categories Filter */}
       <section className="border-b border-border pb-6">
         <div className="vsm-container">
           <div className="flex flex-wrap justify-center gap-2">
@@ -69,27 +69,34 @@ const Boutique = () => {
         </div>
       </section>
 
-      {/* Products Grid */}
       <section className="vsm-section">
         <div className="vsm-container">
-          <motion.div
-            key={activeCategory}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.3 }}
-            className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
-          >
-            {filteredProducts.map((product, index) => (
-              <ProductCard key={product.id} product={product} index={index} />
-            ))}
-          </motion.div>
-
-          {filteredProducts.length === 0 && (
-            <div className="py-20 text-center">
-              <p className="text-muted-foreground">
-                Aucun produit dans cette catégorie pour le moment.
-              </p>
+          {isLoading ? (
+            <div className="flex justify-center py-20">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
+          ) : (
+            <>
+              <motion.div
+                key={activeCategory}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.3 }}
+                className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+              >
+                {filteredProducts.map((product, index) => (
+                  <ProductCard key={product.id} product={product} index={index} />
+                ))}
+              </motion.div>
+
+              {filteredProducts.length === 0 && (
+                <div className="py-20 text-center">
+                  <p className="text-muted-foreground">
+                    Aucun produit dans cette catégorie pour le moment.
+                  </p>
+                </div>
+              )}
+            </>
           )}
         </div>
       </section>
