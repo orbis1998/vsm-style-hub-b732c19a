@@ -15,10 +15,10 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 
 interface Order {
-  id: string;
-  total: number;
+  id: number;
+  total_amount: number;
   status: string;
-  created_at: string;
+  created_at: string | null;
 }
 
 const statusConfig: Record<string, { label: string; icon: any; color: string }> = {
@@ -173,7 +173,7 @@ const ClientDashboard = () => {
                             Commande du {formatDate(order.created_at)}
                           </p>
                           <p className="mt-1 font-display text-xl font-bold">
-                            {formatPrice(order.total)}
+                            {formatPrice(order.total_amount)}
                           </p>
                         </div>
                         <div className={`flex items-center gap-2 ${status.color}`}>

@@ -84,12 +84,10 @@ const BecomeAmbassador = () => {
 
       const { error } = await supabase.from("ambassador_applications").insert({
         full_name: validatedData.fullName,
-        email: validatedData.email,
         phone: validatedData.phone,
-        instagram_handle: validatedData.instagramHandle || null,
-        tiktok_handle: validatedData.tiktokHandle || null,
-        facebook_handle: validatedData.facebookHandle || null,
-        followers_count: validatedData.followersCount || null,
+        main_platform: validatedData.instagramHandle || "instagram",
+        username: validatedData.instagramHandle || validatedData.tiktokHandle || validatedData.facebookHandle || "",
+        profile_url: validatedData.tiktokHandle || validatedData.facebookHandle || null,
         motivation: validatedData.motivation,
       });
 
