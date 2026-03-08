@@ -1,21 +1,25 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
 import {
-  Package, Users, DollarSign, Eye, ShoppingCart, TrendingUp, Plus, Edit, Trash2,
-  LogOut, Menu, X, Tag, Truck, UserCheck, BarChart3, Save, Loader2, Check, XCircle, Image,
+  Package, Users, DollarSign, ShoppingCart, Plus, Edit, Trash2,
+  LogOut, Menu, X, Tag, Truck, UserCheck, BarChart3, Save, Loader2, Check, XCircle, Image, Settings,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
 import { useAllProducts, useCreateProduct, useUpdateProduct, useDeleteProduct } from "@/hooks/useProducts";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
 import { Tables } from "@/integrations/supabase/types";
+import ImageUploader from "@/components/admin/ImageUploader";
+import MultiImageUploader from "@/components/admin/MultiImageUploader";
 
 const menuItems = [
   { icon: BarChart3, label: "Dashboard", id: "dashboard" },
@@ -25,33 +29,89 @@ const menuItems = [
   { icon: Tag, label: "Promos", id: "promos" },
   { icon: UserCheck, label: "Ambassadeurs", id: "ambassadors" },
   { icon: Users, label: "Clients", id: "clients" },
+  { icon: Image, label: "Héros", id: "hero" },
 ];
 
 const formatPrice = (price: number) => price.toLocaleString("fr-CD") + " FC";
+
+const SIZES = ["XS", "S", "M", "L", "XL", "XXL", "3XL"];
+const COLORS = [
+  { name: "Noir", value: "#000000" },
+  { name: "Blanc", value: "#FFFFFF" },
+  { name: "Rouge", value: "#E11D48" },
+  { name: "Bleu", value: "#2563EB" },
+  { name: "Vert", value: "#16A34A" },
+  { name: "Gris", value: "#6B7280" },
+  { name: "Beige", value: "#D2B48C" },
+  { name: "Marine", value: "#1E3A5F" },
+];
 
 // =================== Product Form ===================
 const ProductForm = ({ product, onClose }: { product?: Tables<"products"> | null; onClose: () => void }) => {
   const createProduct = useCreateProduct();
   const updateProduct = useUpdateProduct();
+
+  // Parse existing images array
+  const existingImages = product?.images || (product?.image_url ? [product.image_url] : []);
+
   const [form, setForm] = useState({
     name: product?.name || "",
     description: product?.description || "",
     price: product?.price ? String(product.price) : "",
     category: product?.category || "",
     image_url: product?.image_url || "",
+    images: existingImages as string[],
     stock: product?.stock ? String(product.stock) : "0",
     sku: product?.sku || "",
     is_active: product?.is_active ?? true,
   });
 
+  // Variants state (stored as JSON in description for now, or we use a convention)
+  const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
+  const [selectedColors, setSelectedColors] = useState<string[]>([]);
+
+  // Parse existing variants from description
+  useState(() => {
+    if (product?.description) {
+      try {
+        const match = product.description.match(/\[VARIANTS:(.*?)\]/);
+        if (match) {
+          const variants = JSON.parse(match[1]);
+          setSelectedSizes(variants.sizes || []);
+          setSelectedColors(variants.colors || []);
+        }
+      } catch { /* ignore */ }
+    }
+  });
+
+  const toggleSize = (size: string) => {
+    setSelectedSizes(prev => prev.includes(size) ? prev.filter(s => s !== size) : [...prev, size]);
+  };
+
+  const toggleColor = (color: string) => {
+    setSelectedColors(prev => prev.includes(color) ? prev.filter(c => c !== color) : [...prev, color]);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Append variants info to description
+    let description = form.description;
+    // Remove old variants tag if exists
+    description = description.replace(/\[VARIANTS:.*?\]/, "").trim();
+    if (selectedSizes.length > 0 || selectedColors.length > 0) {
+      description += ` [VARIANTS:${JSON.stringify({ sizes: selectedSizes, colors: selectedColors })}]`;
+    }
+
+    const mainImage = form.images.length > 0 ? form.images[0] : form.image_url || null;
+
     const payload = {
       name: form.name,
-      description: form.description || null,
+      description: description || null,
       price: form.price ? Number(form.price) : null,
       category: form.category || null,
-      image_url: form.image_url || null,
+      image_url: mainImage,
+      images: form.images.length > 0 ? form.images : null,
       stock: form.stock ? Number(form.stock) : 0,
       sku: form.sku || null,
       is_active: form.is_active,
@@ -74,7 +134,13 @@ const ProductForm = ({ product, onClose }: { product?: Tables<"products"> | null
   const isLoading = createProduct.isPending || updateProduct.isPending;
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-5">
+      {/* Images */}
+      <div className="space-y-2">
+        <label className="text-sm font-medium">Images du produit</label>
+        <MultiImageUploader values={form.images} onChange={(urls) => setForm({ ...form, images: urls, image_url: urls[0] || "" })} folder="products" />
+      </div>
+
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <label className="text-sm font-medium">Nom *</label>
@@ -103,25 +169,54 @@ const ProductForm = ({ product, onClose }: { product?: Tables<"products"> | null
             </SelectContent>
           </Select>
         </div>
-        <div className="space-y-2">
-          <label className="text-sm font-medium">Actif</label>
-          <Select value={form.is_active ? "true" : "false"} onValueChange={(v) => setForm({ ...form, is_active: v === "true" })}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="true">Oui</SelectItem>
-              <SelectItem value="false">Non</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="flex items-end gap-4">
+          <div className="flex items-center gap-2">
+            <Switch checked={form.is_active} onCheckedChange={(v) => setForm({ ...form, is_active: v })} />
+            <label className="text-sm">Actif</label>
+          </div>
         </div>
       </div>
+
+      {/* Sizes */}
       <div className="space-y-2">
-        <label className="text-sm font-medium">URL Image</label>
-        <Input value={form.image_url} onChange={(e) => setForm({ ...form, image_url: e.target.value })} placeholder="https://..." />
+        <label className="text-sm font-medium">Tailles disponibles</label>
+        <div className="flex flex-wrap gap-2">
+          {SIZES.map((size) => (
+            <button key={size} type="button" onClick={() => toggleSize(size)}
+              className={`rounded-sm border px-3 py-1.5 text-sm font-medium transition-colors ${
+                selectedSizes.includes(size)
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border bg-secondary text-muted-foreground hover:border-primary"
+              }`}>
+              {size}
+            </button>
+          ))}
+        </div>
       </div>
+
+      {/* Colors */}
+      <div className="space-y-2">
+        <label className="text-sm font-medium">Couleurs disponibles</label>
+        <div className="flex flex-wrap gap-2">
+          {COLORS.map((color) => (
+            <button key={color.value} type="button" onClick={() => toggleColor(color.name)}
+              className={`flex items-center gap-2 rounded-sm border px-3 py-1.5 text-sm transition-colors ${
+                selectedColors.includes(color.name)
+                  ? "border-primary bg-primary/10"
+                  : "border-border hover:border-primary"
+              }`}>
+              <span className="h-4 w-4 rounded-full border border-border" style={{ backgroundColor: color.value }} />
+              {color.name}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="space-y-2">
         <label className="text-sm font-medium">Description</label>
-        <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} />
+        <Textarea value={form.description.replace(/\[VARIANTS:.*?\]/, "").trim()} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} />
       </div>
+
       <div className="flex justify-end gap-2">
         <Button type="button" variant="outline" onClick={onClose}>Annuler</Button>
         <Button type="submit" disabled={isLoading} className="gap-2">
@@ -133,21 +228,184 @@ const ProductForm = ({ product, onClose }: { product?: Tables<"products"> | null
   );
 };
 
+// =================== Hero Manager ===================
+const HeroManager = () => {
+  const queryClient = useQueryClient();
+  const { data: heroSettings, isLoading } = useQuery({
+    queryKey: ["hero-settings"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("settings")
+        .select("*")
+        .in("key", ["hero_1_image", "hero_1_title", "hero_1_subtitle", "hero_2_image", "hero_2_title", "hero_2_subtitle", "hero_3_image", "hero_3_title", "hero_3_subtitle"]);
+      if (error) throw error;
+      const map: Record<string, string> = {};
+      (data || []).forEach(s => { map[s.key] = s.value || ""; });
+      return map;
+    },
+  });
+
+  const [slides, setSlides] = useState<{ image: string; title: string; subtitle: string }[]>([]);
+  const [initialized, setInitialized] = useState(false);
+
+  if (heroSettings && !initialized) {
+    setSlides([
+      { image: heroSettings.hero_1_image || "", title: heroSettings.hero_1_title || "Nouvelle Collection", subtitle: heroSettings.hero_1_subtitle || "Automne / Hiver 2024" },
+      { image: heroSettings.hero_2_image || "", title: heroSettings.hero_2_title || "Style Urbain", subtitle: heroSettings.hero_2_subtitle || "Made in DRC" },
+      { image: heroSettings.hero_3_image || "", title: heroSettings.hero_3_title || "Édition Limitée", subtitle: heroSettings.hero_3_subtitle || "Exclusivité VSM" },
+    ]);
+    setInitialized(true);
+  }
+
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    const updates = slides.flatMap((slide, i) => [
+      { key: `hero_${i + 1}_image`, value: slide.image },
+      { key: `hero_${i + 1}_title`, value: slide.title },
+      { key: `hero_${i + 1}_subtitle`, value: slide.subtitle },
+    ]);
+
+    for (const item of updates) {
+      await supabase.from("settings").upsert({ key: item.key, value: item.value }, { onConflict: "key" });
+    }
+
+    toast({ title: "Slides héros mises à jour" });
+    queryClient.invalidateQueries({ queryKey: ["hero-settings"] });
+    setSaving(false);
+  };
+
+  const updateSlide = (index: number, field: string, value: string) => {
+    setSlides(prev => prev.map((s, i) => i === index ? { ...s, [field]: value } : s));
+  };
+
+  if (isLoading) return <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h3 className="font-display text-xl font-bold">Section Héros</h3>
+        <Button onClick={handleSave} disabled={saving} className="gap-2">
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+          Sauvegarder
+        </Button>
+      </div>
+
+      <div className="grid gap-6">
+        {slides.map((slide, i) => (
+          <div key={i} className="vsm-card p-6">
+            <h4 className="mb-4 font-display text-lg font-semibold">Slide {i + 1}</h4>
+            <div className="grid gap-4 md:grid-cols-2">
+              <ImageUploader value={slide.image} onChange={(url) => updateSlide(i, "image", url)} folder="hero" />
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Titre</label>
+                  <Input value={slide.title} onChange={(e) => updateSlide(i, "title", e.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Sous-titre</label>
+                  <Input value={slide.subtitle} onChange={(e) => updateSlide(i, "subtitle", e.target.value)} />
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </motion.div>
+  );
+};
+
+// =================== Promo Form ===================
+const PromoForm = ({ onClose }: { onClose: () => void }) => {
+  const queryClient = useQueryClient();
+  const [form, setForm] = useState({
+    code: "", discount_value: "", discount_type: "percent", description: "",
+    max_usage: "", is_global: true, ambassador_id: "",
+  });
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.code || !form.discount_value) return;
+    setSaving(true);
+    const { error } = await supabase.from("promo_codes").insert({
+      code: form.code.toUpperCase(),
+      discount_value: Number(form.discount_value),
+      discount_type: form.discount_type,
+      description: form.description || null,
+      max_usage: form.max_usage ? Number(form.max_usage) : null,
+      is_global: form.is_global,
+      ambassador_id: form.ambassador_id || null,
+    });
+    if (error) {
+      toast({ title: "Erreur", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Code promo créé" });
+      queryClient.invalidateQueries({ queryKey: ["admin-promos"] });
+      onClose();
+    }
+    setSaving(false);
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Code *</label>
+          <Input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} placeholder="VSM20" required />
+        </div>
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Valeur *</label>
+          <Input type="number" value={form.discount_value} onChange={(e) => setForm({ ...form, discount_value: e.target.value })} required />
+        </div>
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Type</label>
+          <Select value={form.discount_type} onValueChange={(v) => setForm({ ...form, discount_type: v })}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="percent">Pourcentage (%)</SelectItem>
+              <SelectItem value="fixed">Fixe (FC)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Max utilisations</label>
+          <Input type="number" value={form.max_usage} onChange={(e) => setForm({ ...form, max_usage: e.target.value })} placeholder="Illimité" />
+        </div>
+      </div>
+      <div className="space-y-2">
+        <label className="text-sm font-medium">Description</label>
+        <Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Promo été 2025..." />
+      </div>
+      <div className="flex items-center gap-2">
+        <Switch checked={form.is_global} onCheckedChange={(v) => setForm({ ...form, is_global: v })} />
+        <label className="text-sm">Code global (visible par tous)</label>
+      </div>
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="outline" onClick={onClose}>Annuler</Button>
+        <Button type="submit" disabled={saving} className="gap-2">
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+          Créer
+        </Button>
+      </div>
+    </form>
+  );
+};
+
 // =================== Main Admin Dashboard ===================
 const AdminDashboard = () => {
   const navigate = useNavigate();
-  const { user, isAdmin, signOut, loading: authLoading } = useAuth();
+  const { user, isAdmin, signOut, loading: authLoading, rolesLoading } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("dashboard");
   const [editProduct, setEditProduct] = useState<Tables<"products"> | null>(null);
   const [showProductForm, setShowProductForm] = useState(false);
+  const [showPromoForm, setShowPromoForm] = useState(false);
   const queryClient = useQueryClient();
 
-  // Products
   const { data: products, isLoading: productsLoading } = useAllProducts();
   const deleteProduct = useDeleteProduct();
 
-  // Orders
   const { data: orders } = useQuery({
     queryKey: ["admin-orders"],
     queryFn: async () => {
@@ -155,9 +413,9 @@ const AdminDashboard = () => {
       if (error) throw error;
       return data || [];
     },
+    enabled: !!user && isAdmin,
   });
 
-  // Promo codes
   const { data: promoCodes } = useQuery({
     queryKey: ["admin-promos"],
     queryFn: async () => {
@@ -165,9 +423,9 @@ const AdminDashboard = () => {
       if (error) throw error;
       return data || [];
     },
+    enabled: !!user && isAdmin,
   });
 
-  // Delivery zones
   const { data: deliveryZones } = useQuery({
     queryKey: ["admin-delivery"],
     queryFn: async () => {
@@ -175,9 +433,9 @@ const AdminDashboard = () => {
       if (error) throw error;
       return data || [];
     },
+    enabled: !!user && isAdmin,
   });
 
-  // Ambassador applications
   const { data: ambassadorApps } = useQuery({
     queryKey: ["admin-ambassadors"],
     queryFn: async () => {
@@ -185,9 +443,9 @@ const AdminDashboard = () => {
       if (error) throw error;
       return data || [];
     },
+    enabled: !!user && isAdmin,
   });
 
-  // Clients
   const { data: clients } = useQuery({
     queryKey: ["admin-clients"],
     queryFn: async () => {
@@ -195,13 +453,14 @@ const AdminDashboard = () => {
       if (error) throw error;
       return data || [];
     },
+    enabled: !!user && isAdmin,
   });
 
-  // Stats
   const totalRevenue = (orders || []).reduce((sum, o) => sum + Number(o.total_amount), 0);
   const totalOrders = (orders || []).length;
   const totalProducts = (products || []).length;
   const totalClients = (clients || []).length;
+  const pendingApps = (ambassadorApps || []).filter(a => a.status === "pending").length;
 
   const stats = [
     { label: "Produits", value: totalProducts, icon: Package, color: "text-blue-500" },
@@ -209,23 +468,6 @@ const AdminDashboard = () => {
     { label: "Clients", value: totalClients, icon: Users, color: "text-primary" },
     { label: "Revenus", value: formatPrice(totalRevenue), icon: DollarSign, color: "text-yellow-500" },
   ];
-
-  // Promo form state
-  const [promoForm, setPromoForm] = useState({ code: "", discount_value: "", discount_type: "percent", description: "" });
-
-  const handleCreatePromo = async () => {
-    if (!promoForm.code || !promoForm.discount_value) return;
-    const { error } = await supabase.from("promo_codes").insert({
-      code: promoForm.code.toUpperCase(),
-      discount_value: Number(promoForm.discount_value),
-      discount_type: promoForm.discount_type,
-      description: promoForm.description || null,
-    });
-    if (error) { toast({ title: "Erreur", description: error.message, variant: "destructive" }); return; }
-    toast({ title: "Code promo créé" });
-    setPromoForm({ code: "", discount_value: "", discount_type: "percent", description: "" });
-    queryClient.invalidateQueries({ queryKey: ["admin-promos"] });
-  };
 
   // Delivery zone form
   const [dzForm, setDzForm] = useState({ name: "", city: "", price: "" });
@@ -238,7 +480,6 @@ const AdminDashboard = () => {
     queryClient.invalidateQueries({ queryKey: ["admin-delivery"] });
   };
 
-  // Ambassador app status update
   const handleAppStatus = async (id: number, status: string) => {
     const { error } = await supabase.from("ambassador_applications").update({ status }).eq("id", id);
     if (error) { toast({ title: "Erreur", description: error.message, variant: "destructive" }); return; }
@@ -246,7 +487,6 @@ const AdminDashboard = () => {
     queryClient.invalidateQueries({ queryKey: ["admin-ambassadors"] });
   };
 
-  // Order status update
   const handleOrderStatus = async (id: number, status: string) => {
     const { error } = await supabase.from("orders").update({ status }).eq("id", id);
     if (error) { toast({ title: "Erreur", description: error.message, variant: "destructive" }); return; }
@@ -254,7 +494,36 @@ const AdminDashboard = () => {
     queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
   };
 
-  if (authLoading) {
+  const handleTogglePromo = async (id: number, active: boolean) => {
+    const { error } = await supabase.from("promo_codes").update({ active }).eq("id", id);
+    if (error) { toast({ title: "Erreur", description: error.message, variant: "destructive" }); return; }
+    toast({ title: active ? "Code activé" : "Code désactivé" });
+    queryClient.invalidateQueries({ queryKey: ["admin-promos"] });
+  };
+
+  const handleDeletePromo = async (id: number) => {
+    if (!confirm("Supprimer ce code promo ?")) return;
+    const { error } = await supabase.from("promo_codes").delete().eq("id", id);
+    if (error) { toast({ title: "Erreur", description: error.message, variant: "destructive" }); return; }
+    toast({ title: "Code supprimé" });
+    queryClient.invalidateQueries({ queryKey: ["admin-promos"] });
+  };
+
+  const handleToggleDZ = async (id: number, is_active: boolean) => {
+    const { error } = await supabase.from("delivery_zones").update({ is_active }).eq("id", id);
+    if (error) { toast({ title: "Erreur", description: error.message, variant: "destructive" }); return; }
+    queryClient.invalidateQueries({ queryKey: ["admin-delivery"] });
+  };
+
+  const handleDeleteDZ = async (id: number) => {
+    if (!confirm("Supprimer cette zone ?")) return;
+    const { error } = await supabase.from("delivery_zones").delete().eq("id", id);
+    if (error) { toast({ title: "Erreur", description: error.message, variant: "destructive" }); return; }
+    toast({ title: "Zone supprimée" });
+    queryClient.invalidateQueries({ queryKey: ["admin-delivery"] });
+  };
+
+  if (authLoading || rolesLoading) {
     return <div className="flex min-h-screen items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
 
@@ -279,18 +548,25 @@ const AdminDashboard = () => {
           <button onClick={() => setSidebarOpen(false)} className="lg:hidden"><X className="h-6 w-6" /></button>
         </div>
         <nav className="p-4">
-          <ul className="space-y-2">
+          <ul className="space-y-1">
             {menuItems.map((item) => (
               <li key={item.id}>
                 <button onClick={() => { setActiveTab(item.id); setSidebarOpen(false); }}
                   className={`flex w-full items-center gap-3 rounded-sm px-4 py-3 text-sm font-medium transition-colors ${activeTab === item.id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-secondary hover:text-foreground"}`}>
-                  <item.icon className="h-5 w-5" />{item.label}
+                  <item.icon className="h-5 w-5" />
+                  {item.label}
+                  {item.id === "ambassadors" && pendingApps > 0 && (
+                    <Badge variant="destructive" className="ml-auto text-[10px]">{pendingApps}</Badge>
+                  )}
                 </button>
               </li>
             ))}
           </ul>
         </nav>
-        <div className="absolute bottom-0 left-0 right-0 border-t border-border p-4">
+        <div className="absolute bottom-0 left-0 right-0 space-y-2 border-t border-border p-4">
+          <Button variant="ghost" className="w-full justify-start gap-2 text-muted-foreground" onClick={() => navigate("/mon-compte")}>
+            <Users className="h-5 w-5" />Mon compte client
+          </Button>
           <Button variant="ghost" className="w-full justify-start gap-2" onClick={() => { signOut(); navigate("/"); }}>
             <LogOut className="h-5 w-5" />Déconnexion
           </Button>
@@ -298,7 +574,7 @@ const AdminDashboard = () => {
       </aside>
 
       {/* Main */}
-      <main className="flex-1">
+      <main className="flex-1 overflow-auto">
         <header className="flex h-16 items-center justify-between border-b border-border px-4 lg:px-8">
           <button onClick={() => setSidebarOpen(true)} className="lg:hidden"><Menu className="h-6 w-6" /></button>
           <h2 className="font-display text-lg font-semibold capitalize">{menuItems.find(m => m.id === activeTab)?.label || activeTab}</h2>
@@ -318,15 +594,39 @@ const AdminDashboard = () => {
                   </motion.div>
                 ))}
               </div>
+
+              {/* Recent orders */}
+              <div className="vsm-card p-6">
+                <h3 className="mb-4 font-display text-lg font-semibold">Commandes récentes</h3>
+                {(orders || []).length === 0 ? (
+                  <p className="text-muted-foreground">Aucune commande pour le moment.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {(orders || []).slice(0, 5).map((order) => (
+                      <div key={order.id} className="flex items-center justify-between rounded-sm border border-border p-3">
+                        <div>
+                          <span className="font-medium">#{order.id}</span>
+                          <span className="ml-2 text-sm text-muted-foreground">{(order as any).profiles?.full_name || "Client"}</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="font-semibold text-primary">{formatPrice(Number(order.total_amount))}</span>
+                          <Badge variant={order.status === "delivered" ? "default" : "secondary"}>{order.status}</Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <div className="grid gap-4 sm:grid-cols-3">
                 <Button variant="outline" className="h-24 flex-col gap-2" onClick={() => { setEditProduct(null); setShowProductForm(true); setActiveTab("products"); }}>
                   <Plus className="h-6 w-6 text-primary" />Ajouter un produit
                 </Button>
-                <Button variant="outline" className="h-24 flex-col gap-2" onClick={() => setActiveTab("promos")}>
+                <Button variant="outline" className="h-24 flex-col gap-2" onClick={() => { setShowPromoForm(true); setActiveTab("promos"); }}>
                   <Tag className="h-6 w-6 text-primary" />Créer une promo
                 </Button>
-                <Button variant="outline" className="h-24 flex-col gap-2" onClick={() => setActiveTab("ambassadors")}>
-                  <UserCheck className="h-6 w-6 text-primary" />Voir ambassadeurs
+                <Button variant="outline" className="h-24 flex-col gap-2" onClick={() => setActiveTab("hero")}>
+                  <Image className="h-6 w-6 text-primary" />Modifier le héros
                 </Button>
               </div>
             </motion.div>
@@ -424,7 +724,6 @@ const AdminDashboard = () => {
                         <th className="px-4 py-3 text-left text-sm font-semibold">Total</th>
                         <th className="px-4 py-3 text-left text-sm font-semibold">Statut</th>
                         <th className="px-4 py-3 text-left text-sm font-semibold">Date</th>
-                        <th className="px-4 py-3 text-right text-sm font-semibold">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -435,7 +734,7 @@ const AdminDashboard = () => {
                           <td className="px-4 py-4 font-semibold text-primary">{formatPrice(Number(order.total_amount))}</td>
                           <td className="px-4 py-4">
                             <Select value={order.status} onValueChange={(v) => handleOrderStatus(order.id, v)}>
-                              <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+                              <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
                               <SelectContent>
                                 {["pending", "confirmed", "shipped", "delivered", "cancelled"].map((s) => (
                                   <SelectItem key={s} value={s}>{s}</SelectItem>
@@ -444,7 +743,6 @@ const AdminDashboard = () => {
                             </Select>
                           </td>
                           <td className="px-4 py-4 text-sm text-muted-foreground">{order.created_at ? new Date(order.created_at).toLocaleDateString("fr-FR") : "—"}</td>
-                          <td className="px-4 py-4 text-right">—</td>
                         </tr>
                       ))}
                     </tbody>
@@ -477,6 +775,7 @@ const AdminDashboard = () => {
                       <th className="px-4 py-3 text-left text-sm font-semibold">Ville</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold">Prix</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold">Actif</th>
+                      <th className="px-4 py-3 text-right text-sm font-semibold">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -485,7 +784,14 @@ const AdminDashboard = () => {
                         <td className="px-4 py-4 font-medium">{dz.name}</td>
                         <td className="px-4 py-4 text-muted-foreground">{dz.city || "—"}</td>
                         <td className="px-4 py-4">{dz.price ? formatPrice(Number(dz.price)) : "—"}</td>
-                        <td className="px-4 py-4">{dz.is_active ? <Check className="h-4 w-4 text-green-500" /> : <XCircle className="h-4 w-4 text-red-500" />}</td>
+                        <td className="px-4 py-4">
+                          <Switch checked={dz.is_active} onCheckedChange={(v) => handleToggleDZ(dz.id, v)} />
+                        </td>
+                        <td className="px-4 py-4 text-right">
+                          <button className="rounded-sm p-2 hover:bg-destructive/20" onClick={() => handleDeleteDZ(dz.id)}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -498,20 +804,17 @@ const AdminDashboard = () => {
           {/* ============ PROMOS ============ */}
           {activeTab === "promos" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-              <h3 className="font-display text-xl font-bold">Codes Promo</h3>
-              <div className="vsm-card p-6">
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                  <Input placeholder="Code (ex: VSM20)" value={promoForm.code} onChange={(e) => setPromoForm({ ...promoForm, code: e.target.value })} />
-                  <Input placeholder="Valeur" type="number" value={promoForm.discount_value} onChange={(e) => setPromoForm({ ...promoForm, discount_value: e.target.value })} />
-                  <Select value={promoForm.discount_type} onValueChange={(v) => setPromoForm({ ...promoForm, discount_type: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="percent">Pourcentage (%)</SelectItem>
-                      <SelectItem value="fixed">Fixe (FC)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Button onClick={handleCreatePromo} className="gap-2"><Plus className="h-4 w-4" />Créer</Button>
-                </div>
+              <div className="flex items-center justify-between">
+                <h3 className="font-display text-xl font-bold">Codes Promo</h3>
+                <Dialog open={showPromoForm} onOpenChange={setShowPromoForm}>
+                  <DialogTrigger asChild>
+                    <Button className="gap-2"><Plus className="h-4 w-4" />Nouveau code</Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-lg">
+                    <DialogHeader><DialogTitle>Créer un code promo</DialogTitle></DialogHeader>
+                    <PromoForm onClose={() => setShowPromoForm(false)} />
+                  </DialogContent>
+                </Dialog>
               </div>
               <div className="vsm-card overflow-hidden">
                 <table className="w-full">
@@ -520,7 +823,9 @@ const AdminDashboard = () => {
                       <th className="px-4 py-3 text-left text-sm font-semibold">Code</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold">Réduction</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold">Utilisations</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold">Type</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold">Actif</th>
+                      <th className="px-4 py-3 text-right text-sm font-semibold">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -529,7 +834,19 @@ const AdminDashboard = () => {
                         <td className="px-4 py-4 font-medium text-primary">{promo.code}</td>
                         <td className="px-4 py-4">{promo.discount_type === "percent" ? `${promo.discount_value}%` : formatPrice(Number(promo.discount_value))}</td>
                         <td className="px-4 py-4">{promo.usage_count}{promo.max_usage ? `/${promo.max_usage}` : ""}</td>
-                        <td className="px-4 py-4">{promo.active ? <Check className="h-4 w-4 text-green-500" /> : <XCircle className="h-4 w-4 text-red-500" />}</td>
+                        <td className="px-4 py-4">
+                          <Badge variant={promo.is_global ? "default" : "secondary"}>
+                            {promo.is_global ? "Global" : "Ambassadeur"}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-4">
+                          <Switch checked={promo.active} onCheckedChange={(v) => handleTogglePromo(promo.id, v)} />
+                        </td>
+                        <td className="px-4 py-4 text-right">
+                          <button className="rounded-sm p-2 hover:bg-destructive/20" onClick={() => handleDeletePromo(promo.id)}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -561,11 +878,9 @@ const AdminDashboard = () => {
                         <td className="px-4 py-4">{app.main_platform}</td>
                         <td className="px-4 py-4 text-primary">@{app.username}</td>
                         <td className="px-4 py-4">
-                          <span className={`rounded-full px-2 py-1 text-xs font-medium ${
-                            app.status === "approved" ? "bg-green-500/20 text-green-500" :
-                            app.status === "rejected" ? "bg-red-500/20 text-red-500" :
-                            "bg-yellow-500/20 text-yellow-500"
-                          }`}>{app.status}</span>
+                          <Badge variant={app.status === "approved" ? "default" : app.status === "rejected" ? "destructive" : "secondary"}>
+                            {app.status === "approved" ? "Approuvé" : app.status === "rejected" ? "Refusé" : "En attente"}
+                          </Badge>
                         </td>
                         <td className="px-4 py-4">
                           <div className="flex justify-end gap-2">
@@ -611,7 +926,7 @@ const AdminDashboard = () => {
                         <td className="px-4 py-4 font-medium">{client.full_name || client.name || "—"}</td>
                         <td className="px-4 py-4 text-muted-foreground">{client.email || "—"}</td>
                         <td className="px-4 py-4">{client.phone || "—"}</td>
-                        <td className="px-4 py-4"><span className="rounded-full bg-secondary px-2 py-1 text-xs">{client.role}</span></td>
+                        <td className="px-4 py-4"><Badge variant="secondary">{client.role}</Badge></td>
                         <td className="px-4 py-4 text-sm text-muted-foreground">{client.created_at ? new Date(client.created_at).toLocaleDateString("fr-FR") : "—"}</td>
                       </tr>
                     ))}
@@ -621,6 +936,9 @@ const AdminDashboard = () => {
               </div>
             </motion.div>
           )}
+
+          {/* ============ HERO ============ */}
+          {activeTab === "hero" && <HeroManager />}
         </div>
       </main>
     </div>
