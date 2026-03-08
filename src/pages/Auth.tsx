@@ -25,22 +25,18 @@ const signupSchema = loginSchema.extend({
 
 const Auth = () => {
   const navigate = useNavigate();
-  const { user, signIn, signUp, isAdmin, isAmbassador, loading } = useAuth();
+  const { user, signIn, signUp, isAdmin, isAmbassador, loading, rolesLoading } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-
   const [formData, setFormData] = useState({
-    name: "",
-    email: "",
-    password: "",
-    confirmPassword: "",
+    name: "", email: "", password: "", confirmPassword: "",
   });
 
-  // Redirect authenticated users based on role
+  // Wait for both auth AND roles to be loaded before redirecting
   useEffect(() => {
-    if (!loading && user) {
+    if (!loading && !rolesLoading && user) {
       if (isAdmin) {
         navigate("/admin");
       } else if (isAmbassador) {
@@ -49,7 +45,7 @@ const Auth = () => {
         navigate("/mon-compte");
       }
     }
-  }, [user, loading, isAdmin, isAmbassador, navigate]);
+  }, [user, loading, rolesLoading, isAdmin, isAmbassador, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,57 +54,30 @@ const Auth = () => {
 
     try {
       if (isLogin) {
-        const validated = loginSchema.parse({
-          email: formData.email,
-          password: formData.password,
-        });
-
+        const validated = loginSchema.parse({ email: formData.email, password: formData.password });
         const { error } = await signIn(validated.email, validated.password);
-        
         if (error) {
-          if (error.message.includes("Invalid login credentials")) {
-            toast({
-              title: "Erreur de connexion",
-              description: "Email ou mot de passe incorrect.",
-              variant: "destructive",
-            });
-          } else {
-            toast({
-              title: "Erreur",
-              description: error.message,
-              variant: "destructive",
-            });
-          }
-        } else {
           toast({
-            title: "Connexion réussie!",
-            description: "Bienvenue sur VSM Collection.",
+            title: "Erreur de connexion",
+            description: error.message.includes("Invalid login credentials")
+              ? "Email ou mot de passe incorrect." : error.message,
+            variant: "destructive",
           });
+        } else {
+          toast({ title: "Connexion réussie!", description: "Bienvenue sur VSM Collection." });
         }
       } else {
         const validated = signupSchema.parse(formData);
-
         const { error } = await signUp(validated.email, validated.password, validated.name);
-        
         if (error) {
-          if (error.message.includes("already registered")) {
-            toast({
-              title: "Compte existant",
-              description: "Un compte existe déjà avec cet email. Connectez-vous.",
-              variant: "destructive",
-            });
-          } else {
-            toast({
-              title: "Erreur",
-              description: error.message,
-              variant: "destructive",
-            });
-          }
-        } else {
           toast({
-            title: "Compte créé!",
-            description: "Vérifiez votre email pour confirmer votre inscription.",
+            title: error.message.includes("already registered") ? "Compte existant" : "Erreur",
+            description: error.message.includes("already registered")
+              ? "Un compte existe déjà avec cet email." : error.message,
+            variant: "destructive",
           });
+        } else {
+          toast({ title: "Compte créé!", description: "Vérifiez votre email pour confirmer votre inscription." });
           setIsLogin(true);
         }
       }
@@ -116,9 +85,7 @@ const Auth = () => {
       if (error instanceof z.ZodError) {
         const fieldErrors: Record<string, string> = {};
         error.errors.forEach((err) => {
-          if (err.path[0]) {
-            fieldErrors[err.path[0] as string] = err.message;
-          }
+          if (err.path[0]) fieldErrors[err.path[0] as string] = err.message;
         });
         setErrors(fieldErrors);
       }
@@ -127,7 +94,7 @@ const Auth = () => {
     }
   };
 
-  if (loading) {
+  if (loading || rolesLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
@@ -138,205 +105,93 @@ const Auth = () => {
   return (
     <main className="min-h-screen bg-background">
       <Navbar />
-
       <section className="flex min-h-screen items-center justify-center pb-20 pt-32">
         <div className="vsm-container max-w-md">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="vsm-card p-8"
-          >
-            {/* Tabs */}
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="vsm-card p-8">
             <div className="mb-8 flex border-b border-border">
-              <button
-                onClick={() => setIsLogin(true)}
-                className={`flex-1 pb-4 font-display text-lg uppercase tracking-wider transition-colors ${
-                  isLogin
-                    ? "border-b-2 border-primary text-primary"
-                    : "text-muted-foreground"
-                }`}
-              >
+              <button onClick={() => setIsLogin(true)}
+                className={`flex-1 pb-4 font-display text-lg uppercase tracking-wider transition-colors ${isLogin ? "border-b-2 border-primary text-primary" : "text-muted-foreground"}`}>
                 Connexion
               </button>
-              <button
-                onClick={() => setIsLogin(false)}
-                className={`flex-1 pb-4 font-display text-lg uppercase tracking-wider transition-colors ${
-                  !isLogin
-                    ? "border-b-2 border-primary text-primary"
-                    : "text-muted-foreground"
-                }`}
-              >
+              <button onClick={() => setIsLogin(false)}
+                className={`flex-1 pb-4 font-display text-lg uppercase tracking-wider transition-colors ${!isLogin ? "border-b-2 border-primary text-primary" : "text-muted-foreground"}`}>
                 Inscription
               </button>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-5">
-              {/* Name (signup only) */}
               {!isLogin && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                >
-                  <label className="mb-2 block text-sm font-medium">
-                    Nom complet
-                  </label>
+                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}>
+                  <label className="mb-2 block text-sm font-medium">Nom complet</label>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      value={formData.name}
-                      onChange={(e) =>
-                        setFormData({ ...formData, name: e.target.value })
-                      }
-                      placeholder="Votre nom"
-                      className="pl-10"
-                    />
+                    <Input value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="Votre nom" className="pl-10" />
                   </div>
-                  {errors.name && (
-                    <p className="mt-1 text-sm text-destructive">{errors.name}</p>
-                  )}
+                  {errors.name && <p className="mt-1 text-sm text-destructive">{errors.name}</p>}
                 </motion.div>
               )}
 
-              {/* Email */}
               <div>
-                <label className="mb-2 block text-sm font-medium">
-                  Adresse email
-                </label>
+                <label className="mb-2 block text-sm font-medium">Adresse email</label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) =>
-                      setFormData({ ...formData, email: e.target.value })
-                    }
-                    placeholder="votre@email.com"
-                    className="pl-10"
-                  />
+                  <Input type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} placeholder="votre@email.com" className="pl-10" />
                 </div>
-                {errors.email && (
-                  <p className="mt-1 text-sm text-destructive">{errors.email}</p>
-                )}
+                {errors.email && <p className="mt-1 text-sm text-destructive">{errors.email}</p>}
               </div>
 
-              {/* Password */}
               <div>
-                <label className="mb-2 block text-sm font-medium">
-                  Mot de passe
-                </label>
+                <label className="mb-2 block text-sm font-medium">Mot de passe</label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    type={showPassword ? "text" : "password"}
-                    value={formData.password}
-                    onChange={(e) =>
-                      setFormData({ ...formData, password: e.target.value })
-                    }
-                    placeholder="••••••••"
-                    className="pl-10 pr-10"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  >
-                    {showPassword ? (
-                      <EyeOff className="h-5 w-5" />
-                    ) : (
-                      <Eye className="h-5 w-5" />
-                    )}
+                  <Input type={showPassword ? "text" : "password"} value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} placeholder="••••••••" className="pl-10 pr-10" />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                   </button>
                 </div>
-                {errors.password && (
-                  <p className="mt-1 text-sm text-destructive">{errors.password}</p>
-                )}
+                {errors.password && <p className="mt-1 text-sm text-destructive">{errors.password}</p>}
               </div>
 
-              {/* Confirm Password (signup only) */}
               {!isLogin && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                >
-                  <label className="mb-2 block text-sm font-medium">
-                    Confirmer le mot de passe
-                  </label>
+                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}>
+                  <label className="mb-2 block text-sm font-medium">Confirmer le mot de passe</label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      type={showPassword ? "text" : "password"}
-                      value={formData.confirmPassword}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          confirmPassword: e.target.value,
-                        })
-                      }
-                      placeholder="••••••••"
-                      className="pl-10"
-                    />
+                    <Input type={showPassword ? "text" : "password"} value={formData.confirmPassword} onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })} placeholder="••••••••" className="pl-10" />
                   </div>
-                  {errors.confirmPassword && (
-                    <p className="mt-1 text-sm text-destructive">{errors.confirmPassword}</p>
-                  )}
+                  {errors.confirmPassword && <p className="mt-1 text-sm text-destructive">{errors.confirmPassword}</p>}
                 </motion.div>
               )}
 
-              {/* Forgot Password (login only) */}
               {isLogin && (
                 <div className="text-right">
-                  <Link
-                    to="#"
-                    className="text-sm text-muted-foreground hover:text-primary"
-                  >
-                    Mot de passe oublié?
-                  </Link>
+                  <Link to="#" className="text-sm text-muted-foreground hover:text-primary">Mot de passe oublié?</Link>
                 </div>
               )}
 
-              {/* Submit */}
-              <Button
-                type="submit"
-                variant="hero"
-                size="lg"
-                className="w-full gap-2"
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                ) : (
-                  <>
-                    {isLogin ? "Se connecter" : "Créer un compte"}
-                    <ArrowRight className="h-5 w-5" />
-                  </>
+              <Button type="submit" variant="hero" size="lg" className="w-full gap-2" disabled={isLoading}>
+                {isLoading ? <div className="h-5 w-5 animate-spin rounded-full border-2 border-current border-t-transparent" /> : (
+                  <>{isLogin ? "Se connecter" : "Créer un compte"}<ArrowRight className="h-5 w-5" /></>
                 )}
               </Button>
             </form>
 
-            {/* Alternative */}
             <p className="mt-6 text-center text-sm text-muted-foreground">
               {isLogin ? "Pas encore de compte?" : "Déjà inscrit?"}{" "}
-              <button
-                onClick={() => setIsLogin(!isLogin)}
-                className="font-medium text-primary hover:underline"
-              >
+              <button onClick={() => setIsLogin(!isLogin)} className="font-medium text-primary hover:underline">
                 {isLogin ? "S'inscrire" : "Se connecter"}
               </button>
             </p>
 
-            {/* Ambassador Link */}
             <div className="mt-6 border-t border-border pt-6 text-center">
               <p className="text-sm text-muted-foreground">
                 Vous êtes influenceur?{" "}
-                <Link to="/devenir-ambassadeur" className="font-medium text-primary hover:underline">
-                  Devenir ambassadeur
-                </Link>
+                <Link to="/devenir-ambassadeur" className="font-medium text-primary hover:underline">Devenir ambassadeur</Link>
               </p>
             </div>
           </motion.div>
         </div>
       </section>
-
       <Footer />
     </main>
   );
