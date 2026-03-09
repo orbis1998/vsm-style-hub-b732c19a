@@ -3,27 +3,27 @@ import { motion } from "framer-motion";
 import { Globe, Award, Heart, Zap } from "lucide-react";
 
 const values = [
-  {
-    icon: Globe,
-    title: "Made in DRC",
-    description: "Fièrement conçu et fabriqué en République Démocratique du Congo, pour le monde entier.",
-  },
-  {
-    icon: Award,
-    title: "Qualité Premium",
-    description: "Matériaux de haute qualité, coutures renforcées, finitions soignées sur chaque pièce.",
-  },
-  {
-    icon: Heart,
-    title: "Style Authentique",
-    description: "Un design unique qui reflète notre culture urbaine et notre vision du streetwear.",
-  },
-  {
-    icon: Zap,
-    title: "Éditions Limitées",
-    description: "Des collections exclusives en quantité limitée pour un style unique.",
-  },
-];
+{
+  icon: Globe,
+  title: "Made in DRC",
+  description: "Fièrement conçu et fabriqué en République Démocratique du Congo, pour le monde entier."
+},
+{
+  icon: Award,
+  title: "Qualité Premium",
+  description: "Matériaux de haute qualité, coutures renforcées, finitions soignées sur chaque pièce."
+},
+{
+  icon: Heart,
+  title: "Style Authentique",
+  description: "Un design unique qui reflète notre culture urbaine et notre vision du streetwear."
+},
+{
+  icon: Zap,
+  title: "Éditions Limitées",
+  description: "Des collections exclusives en quantité limitée pour un style unique."
+}];
+
 
 const BrandValues = forwardRef<HTMLElement>((_, ref) => {
   return (
@@ -37,8 +37,8 @@ const BrandValues = forwardRef<HTMLElement>((_, ref) => {
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="mb-16 text-center"
-        >
+          className="mb-16 text-center">
+          
           <p className="font-display text-sm uppercase tracking-[0.3em] text-primary">
             Nos Valeurs
           </p>
@@ -49,15 +49,15 @@ const BrandValues = forwardRef<HTMLElement>((_, ref) => {
 
         {/* Values Grid */}
         <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
-          {values.map((value, index) => (
-            <motion.div
-              key={value.title}
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: index * 0.1 }}
-              className="group text-center"
-            >
+          {values.map((value, index) =>
+          <motion.div
+            key={value.title}
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ delay: index * 0.1 }}
+            className="group text-center">
+            
               <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-sm border border-border bg-secondary transition-all duration-300 group-hover:border-primary group-hover:bg-primary">
                 <value.icon className="h-7 w-7 transition-colors group-hover:text-primary-foreground" />
               </div>
@@ -68,7 +68,7 @@ const BrandValues = forwardRef<HTMLElement>((_, ref) => {
                 {value.description}
               </p>
             </motion.div>
-          ))}
+          )}
         </div>
 
         {/* Tagline */}
@@ -76,15 +76,15 @@ const BrandValues = forwardRef<HTMLElement>((_, ref) => {
           initial={{ opacity: 0 }}
           whileInView={{ opacity: 1 }}
           viewport={{ once: true }}
-          className="mt-20 text-center"
-        >
-          <p className="font-display text-2xl font-light italic tracking-wide text-muted-foreground md:text-3xl">
-            "Worn Worldwide"
-          </p>
+          className="mt-20 text-center">
+          
+          
+
+          
         </motion.div>
       </div>
-    </section>
-  );
+    </section>);
+
 });
 
 BrandValues.displayName = "BrandValues";
