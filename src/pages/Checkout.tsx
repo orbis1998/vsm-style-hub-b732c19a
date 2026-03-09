@@ -27,6 +27,7 @@ const FREE_DELIVERY_THRESHOLD_FC = FREE_DELIVERY_THRESHOLD_USD * USD_TO_FC;
 
 const Checkout = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { items, getTotal, promoCode, promoDiscount, clearCart } = useCart();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
