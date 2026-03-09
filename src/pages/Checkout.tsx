@@ -85,87 +85,114 @@ const Checkout = () => {
     e.preventDefault();
 
     if (!formData.fullName || !formData.phone || !formData.province) {
-      toast({
-        title: "Erreur",
-        description: "Veuillez remplir tous les champs obligatoires.",
-        variant: "destructive",
-      });
+      toast({ title: "Erreur", description: "Veuillez remplir tous les champs obligatoires.", variant: "destructive" });
       return;
     }
 
     if (isKinshasa && !formData.commune) {
-      toast({
-        title: "Erreur",
-        description: "Veuillez sélectionner votre commune.",
-        variant: "destructive",
-      });
+      toast({ title: "Erreur", description: "Veuillez sélectionner votre commune.", variant: "destructive" });
       return;
     }
 
     if (!isKinshasa && !formData.city) {
-      toast({
-        title: "Erreur",
-        description: "Veuillez indiquer votre ville.",
-        variant: "destructive",
-      });
+      toast({ title: "Erreur", description: "Veuillez indiquer votre ville.", variant: "destructive" });
       return;
     }
 
     setIsSubmitting(true);
 
-    // Simulate processing
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    try {
+      // Look up promo_code_id if promo applied
+      let promoCodeId: number | null = null;
+      if (promoCode) {
+        const { data: promoData } = await supabase.from("promo_codes").select("id").eq("code", promoCode).single();
+        if (promoData) promoCodeId = promoData.id;
+      }
 
-    // Build WhatsApp message
-    const productList = items
-      .map(
-        (item) =>
-          `• ${item.name}${item.size ? ` (Taille: ${item.size})` : ""}${item.color ? ` (Couleur: ${item.color})` : ""} x${item.quantity} - ${formatPrice(item.price * item.quantity)}`
-      )
-      .join("\n");
+      const deliveryAddr = isKinshasa
+        ? `${formData.commune}, Kinshasa`
+        : `${formData.city}, ${formData.province}`;
 
-    const locationInfo = isKinshasa
-      ? `📍 Commune: ${formData.commune}, Kinshasa`
-      : `📍 ${formData.city}, ${formData.province}`;
+      // 1. Create order in DB
+      const { data: orderData, error: orderError } = await supabase.from("orders").insert({
+        customer_id: user?.id || null,
+        customer_name: formData.fullName,
+        customer_phone: formData.phone,
+        delivery_address: deliveryAddr,
+        delivery_date: formData.deliveryDate || null,
+        delivery_fee: deliveryFee,
+        notes: formData.instructions || null,
+        promo_code_id: promoCodeId,
+        promo_discount: promoDiscount,
+        total_amount: totalWithDelivery,
+        status: "pending",
+      }).select("id").single();
 
-    const deliveryInfo = isFreeDelivery
-      ? `🎁 Livraison OFFERTE (commande > ${formatPrice(FREE_DELIVERY_THRESHOLD_FC)})`
-      : isKinshasa
-      ? `🚚 Frais de livraison: ${formatPrice(deliveryFee)}`
-      : `🚚 Livraison via agence partenaire`;
+      if (orderError) throw orderError;
 
-    const deliveryDateInfo = formData.deliveryDate
-      ? `📅 Date souhaitée: ${new Date(formData.deliveryDate).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}`
-      : "";
+      // 2. Create order items (triggers stock decrement automatically)
+      const orderItems = items.map((item) => ({
+        order_id: orderData.id,
+        product_id: Number(item.id),
+        product_name: item.name,
+        size: item.size || null,
+        color: item.color || null,
+        quantity: item.quantity,
+        unit_price: item.price,
+      }));
 
-    const message = encodeURIComponent(
-      `🛍️ *NOUVELLE COMMANDE VSM COLLECTION*\n\n` +
-        `👤 *Client:* ${formData.fullName}\n` +
-        `📞 *Téléphone:* ${formData.phone}\n` +
-        `${locationInfo}\n` +
-        `${deliveryDateInfo ? deliveryDateInfo + "\n" : ""}` +
-        `${formData.instructions ? `📝 Instructions: ${formData.instructions}\n` : ""}` +
-        `\n📦 *ARTICLES:*\n${productList}\n\n` +
-        `💰 Sous-total: ${formatPrice(subtotal)}\n` +
-        `${promoDiscount > 0 ? `🏷️ Réduction (${promoCode}): -${formatPrice(promoDiscount)}\n` : ""}` +
-        `${deliveryInfo}\n` +
-        `\n💵 *TOTAL: ${formatPrice(totalWithDelivery)}*\n\n` +
-        `Merci pour votre commande! 🙏`
-    );
+      const { error: itemsError } = await supabase.from("order_items").insert(orderItems);
+      if (itemsError) throw itemsError;
 
-    // Redirect to WhatsApp with the correct number
-    const whatsappNumber = "243976028479";
-    window.open(`https://wa.me/${whatsappNumber}?text=${message}`, "_blank");
+      // 3. Build WhatsApp message
+      const productList = items
+        .map(
+          (item) =>
+            `• ${item.name}${item.size ? ` (Taille: ${item.size})` : ""}${item.color ? ` (Couleur: ${item.color})` : ""} x${item.quantity} - ${formatPrice(item.price * item.quantity)}`
+        )
+        .join("\n");
 
-    clearCart();
-    setIsSubmitting(false);
-    
-    toast({
-      title: "Commande envoyée!",
-      description: "Vous allez être redirigé vers WhatsApp.",
-    });
+      const locationInfo = isKinshasa
+        ? `📍 Commune: ${formData.commune}, Kinshasa`
+        : `📍 ${formData.city}, ${formData.province}`;
 
-    navigate("/");
+      const deliveryInfo = isFreeDelivery
+        ? `🎁 Livraison OFFERTE (commande > ${formatPrice(FREE_DELIVERY_THRESHOLD_FC)})`
+        : isKinshasa
+        ? `🚚 Frais de livraison: ${formatPrice(deliveryFee)}`
+        : `🚚 Livraison via agence partenaire`;
+
+      const deliveryDateInfo = formData.deliveryDate
+        ? `📅 Date souhaitée: ${new Date(formData.deliveryDate).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}`
+        : "";
+
+      const message = encodeURIComponent(
+        `🛍️ *NOUVELLE COMMANDE VSM #${orderData.id}*\n\n` +
+          `👤 *Client:* ${formData.fullName}\n` +
+          `📞 *Téléphone:* ${formData.phone}\n` +
+          `${locationInfo}\n` +
+          `${deliveryDateInfo ? deliveryDateInfo + "\n" : ""}` +
+          `${formData.instructions ? `📝 Instructions: ${formData.instructions}\n` : ""}` +
+          `\n📦 *ARTICLES:*\n${productList}\n\n` +
+          `💰 Sous-total: ${formatPrice(subtotal)}\n` +
+          `${promoDiscount > 0 ? `🏷️ Réduction (${promoCode}): -${formatPrice(promoDiscount)}\n` : ""}` +
+          `${deliveryInfo}\n` +
+          `\n💵 *TOTAL: ${formatPrice(totalWithDelivery)}*\n\n` +
+          `Merci pour votre commande! 🙏`
+      );
+
+      const whatsappNumber = "243976028479";
+      window.open(`https://wa.me/${whatsappNumber}?text=${message}`, "_blank");
+
+      clearCart();
+      toast({ title: "Commande enregistrée!", description: `Commande #${orderData.id} créée avec succès.` });
+      navigate("/");
+    } catch (err: any) {
+      console.error("Order error:", err);
+      toast({ title: "Erreur", description: err.message || "Impossible de créer la commande.", variant: "destructive" });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (items.length === 0) {
