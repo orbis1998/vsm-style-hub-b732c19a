@@ -46,12 +46,18 @@ const COLORS = [
   { name: "Marine", value: "#1E3A5F" },
 ];
 
-// =================== Product Form ===================
+// =================== Product Form with Variants ===================
+interface VariantRow {
+  color: string;
+  size: string;
+  stock: number;
+}
+
 const ProductForm = ({ product, onClose }: { product?: Tables<"products"> | null; onClose: () => void }) => {
   const createProduct = useCreateProduct();
   const updateProduct = useUpdateProduct();
+  const queryClient = useQueryClient();
 
-  // Parse existing images array
   const existingImages = product?.images || (product?.image_url ? [product.image_url] : []);
 
   const [form, setForm] = useState({
@@ -61,70 +67,88 @@ const ProductForm = ({ product, onClose }: { product?: Tables<"products"> | null
     category: product?.category || "",
     image_url: product?.image_url || "",
     images: existingImages as string[],
-    stock: product?.stock ? String(product.stock) : "0",
     sku: product?.sku || "",
     is_active: product?.is_active ?? true,
   });
 
-  // Variants state (stored as JSON in description for now, or we use a convention)
-  const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
-  const [selectedColors, setSelectedColors] = useState<string[]>([]);
+  // Variants state
+  const [variants, setVariants] = useState<VariantRow[]>([]);
+  const [newColor, setNewColor] = useState("");
+  const [newSize, setNewSize] = useState("");
+  const [newStock, setNewStock] = useState("0");
+  const [variantsLoaded, setVariantsLoaded] = useState(!product);
 
-  // Parse existing variants from description
+  // Load existing variants from DB
   useState(() => {
-    if (product?.description) {
-      try {
-        const match = product.description.match(/\[VARIANTS:(.*?)\]/);
-        if (match) {
-          const variants = JSON.parse(match[1]);
-          setSelectedSizes(variants.sizes || []);
-          setSelectedColors(variants.colors || []);
+    if (product) {
+      supabase.from("product_variants").select("*").eq("product_id", product.id).then(({ data }) => {
+        if (data) {
+          setVariants(data.map((v: any) => ({ color: v.color, size: v.size, stock: v.stock })));
         }
-      } catch { /* ignore */ }
+        setVariantsLoaded(true);
+      });
     }
   });
 
-  const toggleSize = (size: string) => {
-    setSelectedSizes(prev => prev.includes(size) ? prev.filter(s => s !== size) : [...prev, size]);
+  const addVariant = () => {
+    if (!newColor || !newSize) return;
+    const exists = variants.find(v => v.color === newColor && v.size === newSize);
+    if (exists) {
+      toast({ title: "Cette combinaison existe déjà", variant: "destructive" });
+      return;
+    }
+    setVariants(prev => [...prev, { color: newColor, size: newSize, stock: Number(newStock) || 0 }]);
+    setNewStock("0");
   };
 
-  const toggleColor = (color: string) => {
-    setSelectedColors(prev => prev.includes(color) ? prev.filter(c => c !== color) : [...prev, color]);
+  const removeVariant = (index: number) => {
+    setVariants(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const updateVariantStock = (index: number, stock: number) => {
+    setVariants(prev => prev.map((v, i) => i === index ? { ...v, stock } : v));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Append variants info to description
-    let description = form.description;
-    // Remove old variants tag if exists
-    description = description.replace(/\[VARIANTS:.*?\]/, "").trim();
-    if (selectedSizes.length > 0 || selectedColors.length > 0) {
-      description += ` [VARIANTS:${JSON.stringify({ sizes: selectedSizes, colors: selectedColors })}]`;
-    }
-
     const mainImage = form.images.length > 0 ? form.images[0] : form.image_url || null;
+    const totalStock = variants.length > 0 ? variants.reduce((s, v) => s + v.stock, 0) : 0;
 
     const payload = {
       name: form.name,
-      description: description || null,
+      description: form.description || null,
       price: form.price ? Number(form.price) : null,
       category: form.category || null,
       image_url: mainImage,
       images: form.images.length > 0 ? form.images : null,
-      stock: form.stock ? Number(form.stock) : 0,
+      stock: totalStock,
       sku: form.sku || null,
       is_active: form.is_active,
     };
 
     try {
+      let productId: number;
       if (product) {
         await updateProduct.mutateAsync({ id: product.id, ...payload });
+        productId = product.id;
         toast({ title: "Produit mis à jour" });
       } else {
-        await createProduct.mutateAsync(payload);
+        const created = await createProduct.mutateAsync(payload);
+        productId = created.id;
         toast({ title: "Produit créé" });
       }
+
+      // Save variants: delete all existing, then insert new
+      await supabase.from("product_variants").delete().eq("product_id", productId);
+      if (variants.length > 0) {
+        const { error } = await supabase.from("product_variants").insert(
+          variants.map(v => ({ product_id: productId, color: v.color, size: v.size, stock: v.stock }))
+        );
+        if (error) throw error;
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["products"] });
       onClose();
     } catch (err: any) {
       toast({ title: "Erreur", description: err.message, variant: "destructive" });
@@ -132,6 +156,7 @@ const ProductForm = ({ product, onClose }: { product?: Tables<"products"> | null
   };
 
   const isLoading = createProduct.isPending || updateProduct.isPending;
+  const uniqueColors = [...new Set(variants.map(v => v.color))];
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
@@ -155,10 +180,6 @@ const ProductForm = ({ product, onClose }: { product?: Tables<"products"> | null
           <Input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} />
         </div>
         <div className="space-y-2">
-          <label className="text-sm font-medium">Stock</label>
-          <Input type="number" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} />
-        </div>
-        <div className="space-y-2">
           <label className="text-sm font-medium">Catégorie</label>
           <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
             <SelectTrigger><SelectValue placeholder="Choisir" /></SelectTrigger>
@@ -177,44 +198,92 @@ const ProductForm = ({ product, onClose }: { product?: Tables<"products"> | null
         </div>
       </div>
 
-      {/* Sizes */}
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Tailles disponibles</label>
-        <div className="flex flex-wrap gap-2">
-          {SIZES.map((size) => (
-            <button key={size} type="button" onClick={() => toggleSize(size)}
-              className={`rounded-sm border px-3 py-1.5 text-sm font-medium transition-colors ${
-                selectedSizes.includes(size)
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : "border-border bg-secondary text-muted-foreground hover:border-primary"
-              }`}>
-              {size}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Colors */}
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Couleurs disponibles</label>
-        <div className="flex flex-wrap gap-2">
-          {COLORS.map((color) => (
-            <button key={color.value} type="button" onClick={() => toggleColor(color.name)}
-              className={`flex items-center gap-2 rounded-sm border px-3 py-1.5 text-sm transition-colors ${
-                selectedColors.includes(color.name)
-                  ? "border-primary bg-primary/10"
-                  : "border-border hover:border-primary"
-              }`}>
-              <span className="h-4 w-4 rounded-full border border-border" style={{ backgroundColor: color.value }} />
-              {color.name}
-            </button>
-          ))}
-        </div>
-      </div>
-
       <div className="space-y-2">
         <label className="text-sm font-medium">Description</label>
-        <Textarea value={form.description.replace(/\[VARIANTS:.*?\]/, "").trim()} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} />
+        <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} />
+      </div>
+
+      {/* ======= Variants Section ======= */}
+      <div className="space-y-3 rounded-md border border-border p-4">
+        <h4 className="font-display text-sm font-bold uppercase tracking-wider">Variantes (Couleur / Taille / Stock)</h4>
+
+        {/* Add variant row */}
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">Couleur</label>
+            <Select value={newColor} onValueChange={setNewColor}>
+              <SelectTrigger className="w-32"><SelectValue placeholder="Couleur" /></SelectTrigger>
+              <SelectContent>
+                {COLORS.map(c => (
+                  <SelectItem key={c.name} value={c.name}>
+                    <span className="flex items-center gap-2">
+                      <span className="inline-block h-3 w-3 rounded-full border border-border" style={{ backgroundColor: c.value }} />
+                      {c.name}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">Taille</label>
+            <Select value={newSize} onValueChange={setNewSize}>
+              <SelectTrigger className="w-24"><SelectValue placeholder="Taille" /></SelectTrigger>
+              <SelectContent>
+                {SIZES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">Stock</label>
+            <Input type="number" className="w-20" value={newStock} onChange={e => setNewStock(e.target.value)} min={0} />
+          </div>
+          <Button type="button" size="sm" onClick={addVariant} disabled={!newColor || !newSize}>
+            <Plus className="mr-1 h-4 w-4" />Ajouter
+          </Button>
+        </div>
+
+        {/* Variants list grouped by color */}
+        {uniqueColors.length > 0 && (
+          <div className="space-y-3 pt-2">
+            {uniqueColors.map(color => {
+              const colorObj = COLORS.find(c => c.name === color);
+              const colorVariants = variants.filter(v => v.color === color);
+              const colorTotal = colorVariants.reduce((s, v) => s + v.stock, 0);
+              return (
+                <div key={color} className="rounded-sm border border-border/50 p-3">
+                  <div className="mb-2 flex items-center gap-2">
+                    <span className="inline-block h-4 w-4 rounded-full border border-border" style={{ backgroundColor: colorObj?.value || "#888" }} />
+                    <span className="text-sm font-semibold">{color}</span>
+                    <span className="text-xs text-muted-foreground">({colorTotal} pièces)</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {colorVariants.map((v) => {
+                      const idx = variants.findIndex(x => x.color === v.color && x.size === v.size);
+                      return (
+                        <div key={`${v.color}-${v.size}`} className="flex items-center gap-1 rounded-sm border border-border bg-secondary px-2 py-1">
+                          <span className="text-xs font-medium">{v.size}</span>
+                          <Input type="number" className="h-6 w-14 border-0 bg-transparent p-0 text-center text-xs" value={v.stock}
+                            onChange={e => updateVariantStock(idx, Number(e.target.value) || 0)} min={0} />
+                          <button type="button" onClick={() => removeVariant(idx)} className="text-destructive hover:text-destructive/80">
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+            <p className="text-xs text-muted-foreground">
+              Stock total: {variants.reduce((s, v) => s + v.stock, 0)} pièces
+            </p>
+          </div>
+        )}
+
+        {variants.length === 0 && variantsLoaded && (
+          <p className="text-xs text-muted-foreground">Aucune variante. Ajoutez couleur + taille pour gérer le stock par variante.</p>
+        )}
       </div>
 
       <div className="flex justify-end gap-2">

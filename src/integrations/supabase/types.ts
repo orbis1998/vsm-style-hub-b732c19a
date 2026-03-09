@@ -222,6 +222,41 @@ export type Database = {
           },
         ]
       }
+      product_variants: {
+        Row: {
+          color: string
+          created_at: string | null
+          id: number
+          product_id: number
+          size: string
+          stock: number
+        }
+        Insert: {
+          color: string
+          created_at?: string | null
+          id?: never
+          product_id: number
+          size: string
+          stock?: number
+        }
+        Update: {
+          color?: string
+          created_at?: string | null
+          id?: never
+          product_id?: number
+          size?: string
+          stock?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_variants_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       products: {
         Row: {
           category: string | null

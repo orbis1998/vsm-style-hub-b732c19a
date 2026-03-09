@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { heroSlides } from "@/data/store";
@@ -107,14 +107,6 @@ const HeroSlider = () => {
         </div>
       </div>
 
-      <div className="absolute bottom-1/2 left-4 right-4 z-20 flex translate-y-1/2 justify-between md:left-8 md:right-8">
-        <button onClick={prevSlide} className="flex h-12 w-12 items-center justify-center rounded-full border border-border/50 bg-background/20 backdrop-blur-sm transition-all hover:border-primary hover:bg-primary">
-          <ChevronLeft className="h-6 w-6" />
-        </button>
-        <button onClick={nextSlide} className="flex h-12 w-12 items-center justify-center rounded-full border border-border/50 bg-background/20 backdrop-blur-sm transition-all hover:border-primary hover:bg-primary">
-          <ChevronRight className="h-6 w-6" />
-        </button>
-      </div>
 
       <div className="absolute bottom-8 left-1/2 z-20 flex -translate-x-1/2 gap-3">
         {slides.map((_, index) => (
