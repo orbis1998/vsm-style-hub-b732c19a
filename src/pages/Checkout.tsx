@@ -16,6 +16,8 @@ import {
 import { useCart } from "@/context/CartContext";
 import { provinces, kinshasaCommunes } from "@/data/store";
 import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { Loader2, MessageCircle, Truck, MapPin, Gift, Calendar } from "lucide-react";
 
 // Exchange rate: 1 USD = ~2500 FC (approximate)
