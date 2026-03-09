@@ -157,13 +157,71 @@ export type Database = {
         }
         Relationships: []
       }
+      order_items: {
+        Row: {
+          color: string | null
+          created_at: string | null
+          id: number
+          order_id: number
+          product_id: number | null
+          product_name: string
+          quantity: number
+          size: string | null
+          unit_price: number
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string | null
+          id?: never
+          order_id: number
+          product_id?: number | null
+          product_name: string
+          quantity?: number
+          size?: string | null
+          unit_price: number
+        }
+        Update: {
+          color?: string | null
+          created_at?: string | null
+          id?: never
+          order_id?: number
+          product_id?: number | null
+          product_name?: string
+          quantity?: number
+          size?: string | null
+          unit_price?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       orders: {
         Row: {
           ambassador_id: string | null
           created_at: string | null
           customer_id: string | null
+          customer_name: string | null
+          customer_phone: string | null
+          delivery_address: string | null
+          delivery_date: string | null
+          delivery_fee: number | null
           id: number
+          notes: string | null
           promo_code_id: number | null
+          promo_discount: number | null
           source_link_id: number | null
           status: string
           total_amount: number
@@ -173,8 +231,15 @@ export type Database = {
           ambassador_id?: string | null
           created_at?: string | null
           customer_id?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          delivery_address?: string | null
+          delivery_date?: string | null
+          delivery_fee?: number | null
           id?: number
+          notes?: string | null
           promo_code_id?: number | null
+          promo_discount?: number | null
           source_link_id?: number | null
           status: string
           total_amount: number
@@ -184,8 +249,15 @@ export type Database = {
           ambassador_id?: string | null
           created_at?: string | null
           customer_id?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          delivery_address?: string | null
+          delivery_date?: string | null
+          delivery_fee?: number | null
           id?: number
+          notes?: string | null
           promo_code_id?: number | null
+          promo_discount?: number | null
           source_link_id?: number | null
           status?: string
           total_amount?: number
