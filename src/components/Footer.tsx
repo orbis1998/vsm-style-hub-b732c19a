@@ -170,7 +170,7 @@ const Footer = forwardRef<HTMLElement>((_, ref) => {
             © 2024 VSM Collection. Tous droits réservés.
           </p>
           <p className="text-sm text-muted-foreground">
-            Made with ❤️ in DRC
+            Made in DRC
           </p>
         </div>
       </div>
