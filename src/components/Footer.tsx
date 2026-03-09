@@ -158,7 +158,7 @@ const Footer = forwardRef<HTMLElement>((_, ref) => {
                 contact@vsmcollection.com
               </a>
               <p className="text-sm text-muted-foreground">
-                📍 Ngiri-Ngiri, Kinshasa, RDC
+                 Ngiri-Ngiri, Kinshasa, RDC
               </p>
             </div>
           </div>
