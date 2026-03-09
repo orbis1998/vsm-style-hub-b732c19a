@@ -1,3 +1,11 @@
+export interface ProductVariant {
+  id: number;
+  product_id: number;
+  color: string;
+  size: string;
+  stock: number;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -12,6 +20,7 @@ export interface Product {
   sizes?: string[];
   colors?: string[];
   collectionId?: string;
+  variants?: ProductVariant[];
 }
 
 export interface CartItem extends Product {
