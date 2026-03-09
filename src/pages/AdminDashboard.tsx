@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import {
   Package, Users, DollarSign, ShoppingCart, Plus, Edit, Trash2,
   LogOut, Menu, X, Tag, Truck, UserCheck, BarChart3, Save, Loader2, Check, XCircle, Image, Settings,
+  AlertTriangle, Eye, TrendingUp, Calendar, Phone, MapPin, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,6 +34,7 @@ const menuItems = [
 ];
 
 const formatPrice = (price: number) => price.toLocaleString("fr-CD") + " FC";
+const formatDate = (d: string) => new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 
 const SIZES = ["XS", "S", "M", "L", "XL", "XXL", "3XL"];
 const COLORS = [
@@ -46,45 +48,40 @@ const COLORS = [
   { name: "Marine", value: "#1E3A5F" },
 ];
 
+const ORDER_STATUSES: Record<string, { label: string; color: string }> = {
+  pending: { label: "En attente", color: "bg-yellow-500/20 text-yellow-600" },
+  confirmed: { label: "Confirmée", color: "bg-blue-500/20 text-blue-600" },
+  shipped: { label: "Expédiée", color: "bg-purple-500/20 text-purple-600" },
+  delivered: { label: "Livrée", color: "bg-green-500/20 text-green-600" },
+  cancelled: { label: "Annulée", color: "bg-red-500/20 text-red-600" },
+};
+
 // =================== Product Form with Variants ===================
-interface VariantRow {
-  color: string;
-  size: string;
-  stock: number;
-}
+interface VariantRow { color: string; size: string; stock: number; }
 
 const ProductForm = ({ product, onClose }: { product?: Tables<"products"> | null; onClose: () => void }) => {
   const createProduct = useCreateProduct();
   const updateProduct = useUpdateProduct();
   const queryClient = useQueryClient();
-
   const existingImages = product?.images || (product?.image_url ? [product.image_url] : []);
 
   const [form, setForm] = useState({
-    name: product?.name || "",
-    description: product?.description || "",
-    price: product?.price ? String(product.price) : "",
-    category: product?.category || "",
-    image_url: product?.image_url || "",
-    images: existingImages as string[],
-    sku: product?.sku || "",
-    is_active: product?.is_active ?? true,
+    name: product?.name || "", description: product?.description || "",
+    price: product?.price ? String(product.price) : "", category: product?.category || "",
+    image_url: product?.image_url || "", images: existingImages as string[],
+    sku: product?.sku || "", is_active: product?.is_active ?? true,
   });
 
-  // Variants state
   const [variants, setVariants] = useState<VariantRow[]>([]);
   const [newColor, setNewColor] = useState("");
   const [newSize, setNewSize] = useState("");
   const [newStock, setNewStock] = useState("0");
   const [variantsLoaded, setVariantsLoaded] = useState(!product);
 
-  // Load existing variants from DB
   useState(() => {
     if (product) {
       supabase.from("product_variants").select("*").eq("product_id", product.id).then(({ data }) => {
-        if (data) {
-          setVariants(data.map((v: any) => ({ color: v.color, size: v.size, stock: v.stock })));
-        }
+        if (data) setVariants(data.map((v: any) => ({ color: v.color, size: v.size, stock: v.stock })));
         setVariantsLoaded(true);
       });
     }
@@ -92,8 +89,7 @@ const ProductForm = ({ product, onClose }: { product?: Tables<"products"> | null
 
   const addVariant = () => {
     if (!newColor || !newSize) return;
-    const exists = variants.find(v => v.color === newColor && v.size === newSize);
-    if (exists) {
+    if (variants.find(v => v.color === newColor && v.size === newSize)) {
       toast({ title: "Cette combinaison existe déjà", variant: "destructive" });
       return;
     }
@@ -101,45 +97,27 @@ const ProductForm = ({ product, onClose }: { product?: Tables<"products"> | null
     setNewStock("0");
   };
 
-  const removeVariant = (index: number) => {
-    setVariants(prev => prev.filter((_, i) => i !== index));
-  };
-
-  const updateVariantStock = (index: number, stock: number) => {
-    setVariants(prev => prev.map((v, i) => i === index ? { ...v, stock } : v));
-  };
+  const removeVariant = (index: number) => setVariants(prev => prev.filter((_, i) => i !== index));
+  const updateVariantStock = (index: number, stock: number) => setVariants(prev => prev.map((v, i) => i === index ? { ...v, stock } : v));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     const mainImage = form.images.length > 0 ? form.images[0] : form.image_url || null;
     const totalStock = variants.length > 0 ? variants.reduce((s, v) => s + v.stock, 0) : 0;
-
     const payload = {
-      name: form.name,
-      description: form.description || null,
-      price: form.price ? Number(form.price) : null,
-      category: form.category || null,
-      image_url: mainImage,
-      images: form.images.length > 0 ? form.images : null,
-      stock: totalStock,
-      sku: form.sku || null,
-      is_active: form.is_active,
+      name: form.name, description: form.description || null, price: form.price ? Number(form.price) : null,
+      category: form.category || null, image_url: mainImage, images: form.images.length > 0 ? form.images : null,
+      stock: totalStock, sku: form.sku || null, is_active: form.is_active,
     };
-
     try {
       let productId: number;
       if (product) {
         await updateProduct.mutateAsync({ id: product.id, ...payload });
         productId = product.id;
-        toast({ title: "Produit mis à jour" });
       } else {
         const created = await createProduct.mutateAsync(payload);
         productId = created.id;
-        toast({ title: "Produit créé" });
       }
-
-      // Save variants: delete all existing, then insert new
       await supabase.from("product_variants").delete().eq("product_id", productId);
       if (variants.length > 0) {
         const { error } = await supabase.from("product_variants").insert(
@@ -147,7 +125,7 @@ const ProductForm = ({ product, onClose }: { product?: Tables<"products"> | null
         );
         if (error) throw error;
       }
-
+      toast({ title: product ? "Produit mis à jour" : "Produit créé" });
       queryClient.invalidateQueries({ queryKey: ["products"] });
       onClose();
     } catch (err: any) {
@@ -160,34 +138,19 @@ const ProductForm = ({ product, onClose }: { product?: Tables<"products"> | null
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
-      {/* Images */}
       <div className="space-y-2">
         <label className="text-sm font-medium">Images du produit</label>
         <MultiImageUploader values={form.images} onChange={(urls) => setForm({ ...form, images: urls, image_url: urls[0] || "" })} folder="products" />
       </div>
-
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2">
-          <label className="text-sm font-medium">Nom *</label>
-          <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-        </div>
-        <div className="space-y-2">
-          <label className="text-sm font-medium">SKU</label>
-          <Input value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} />
-        </div>
-        <div className="space-y-2">
-          <label className="text-sm font-medium">Prix (FC)</label>
-          <Input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} />
-        </div>
+        <div className="space-y-2"><label className="text-sm font-medium">Nom *</label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></div>
+        <div className="space-y-2"><label className="text-sm font-medium">SKU</label><Input value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} /></div>
+        <div className="space-y-2"><label className="text-sm font-medium">Prix (FC)</label><Input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} /></div>
         <div className="space-y-2">
           <label className="text-sm font-medium">Catégorie</label>
           <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
             <SelectTrigger><SelectValue placeholder="Choisir" /></SelectTrigger>
-            <SelectContent>
-              {["hoodies", "t-shirts", "pantalons", "vestes", "ensembles", "accessoires"].map((c) => (
-                <SelectItem key={c} value={c}>{c}</SelectItem>
-              ))}
-            </SelectContent>
+            <SelectContent>{["hoodies", "t-shirts", "pantalons", "vestes", "ensembles", "accessoires"].map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
           </Select>
         </div>
         <div className="flex items-end gap-4">
@@ -197,53 +160,32 @@ const ProductForm = ({ product, onClose }: { product?: Tables<"products"> | null
           </div>
         </div>
       </div>
+      <div className="space-y-2"><label className="text-sm font-medium">Description</label><Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} /></div>
 
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Description</label>
-        <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} />
-      </div>
-
-      {/* ======= Variants Section ======= */}
+      {/* Variants */}
       <div className="space-y-3 rounded-md border border-border p-4">
         <h4 className="font-display text-sm font-bold uppercase tracking-wider">Variantes (Couleur / Taille / Stock)</h4>
-
-        {/* Add variant row */}
         <div className="flex flex-wrap items-end gap-2">
           <div className="space-y-1">
             <label className="text-xs text-muted-foreground">Couleur</label>
             <Select value={newColor} onValueChange={setNewColor}>
               <SelectTrigger className="w-32"><SelectValue placeholder="Couleur" /></SelectTrigger>
-              <SelectContent>
-                {COLORS.map(c => (
-                  <SelectItem key={c.name} value={c.name}>
-                    <span className="flex items-center gap-2">
-                      <span className="inline-block h-3 w-3 rounded-full border border-border" style={{ backgroundColor: c.value }} />
-                      {c.name}
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
+              <SelectContent>{COLORS.map(c => <SelectItem key={c.name} value={c.name}><span className="flex items-center gap-2"><span className="inline-block h-3 w-3 rounded-full border border-border" style={{ backgroundColor: c.value }} />{c.name}</span></SelectItem>)}</SelectContent>
             </Select>
           </div>
           <div className="space-y-1">
             <label className="text-xs text-muted-foreground">Taille</label>
             <Select value={newSize} onValueChange={setNewSize}>
               <SelectTrigger className="w-24"><SelectValue placeholder="Taille" /></SelectTrigger>
-              <SelectContent>
-                {SIZES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-              </SelectContent>
+              <SelectContent>{SIZES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
             </Select>
           </div>
           <div className="space-y-1">
             <label className="text-xs text-muted-foreground">Stock</label>
             <Input type="number" className="w-20" value={newStock} onChange={e => setNewStock(e.target.value)} min={0} />
           </div>
-          <Button type="button" size="sm" onClick={addVariant} disabled={!newColor || !newSize}>
-            <Plus className="mr-1 h-4 w-4" />Ajouter
-          </Button>
+          <Button type="button" size="sm" onClick={addVariant} disabled={!newColor || !newSize}><Plus className="mr-1 h-4 w-4" />Ajouter</Button>
         </div>
-
-        {/* Variants list grouped by color */}
         {uniqueColors.length > 0 && (
           <div className="space-y-3 pt-2">
             {uniqueColors.map(color => {
@@ -265,9 +207,7 @@ const ProductForm = ({ product, onClose }: { product?: Tables<"products"> | null
                           <span className="text-xs font-medium">{v.size}</span>
                           <Input type="number" className="h-6 w-14 border-0 bg-transparent p-0 text-center text-xs" value={v.stock}
                             onChange={e => updateVariantStock(idx, Number(e.target.value) || 0)} min={0} />
-                          <button type="button" onClick={() => removeVariant(idx)} className="text-destructive hover:text-destructive/80">
-                            <X className="h-3 w-3" />
-                          </button>
+                          <button type="button" onClick={() => removeVariant(idx)} className="text-destructive hover:text-destructive/80"><X className="h-3 w-3" /></button>
                         </div>
                       );
                     })}
@@ -275,15 +215,10 @@ const ProductForm = ({ product, onClose }: { product?: Tables<"products"> | null
                 </div>
               );
             })}
-            <p className="text-xs text-muted-foreground">
-              Stock total: {variants.reduce((s, v) => s + v.stock, 0)} pièces
-            </p>
+            <p className="text-xs text-muted-foreground">Stock total: {variants.reduce((s, v) => s + v.stock, 0)} pièces</p>
           </div>
         )}
-
-        {variants.length === 0 && variantsLoaded && (
-          <p className="text-xs text-muted-foreground">Aucune variante. Ajoutez couleur + taille pour gérer le stock par variante.</p>
-        )}
+        {variants.length === 0 && variantsLoaded && <p className="text-xs text-muted-foreground">Aucune variante ajoutée.</p>}
       </div>
 
       <div className="flex justify-end gap-2">
@@ -303,8 +238,7 @@ const HeroManager = () => {
   const { data: heroSettings, isLoading } = useQuery({
     queryKey: ["hero-settings"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("settings")
-        .select("*")
+      const { data, error } = await supabase.from("settings").select("*")
         .in("key", ["hero_1_image", "hero_1_title", "hero_1_subtitle", "hero_2_image", "hero_2_title", "hero_2_subtitle", "hero_3_image", "hero_3_title", "hero_3_subtitle"]);
       if (error) throw error;
       const map: Record<string, string> = {};
@@ -312,21 +246,17 @@ const HeroManager = () => {
       return map;
     },
   });
-
   const [slides, setSlides] = useState<{ image: string; title: string; subtitle: string }[]>([]);
   const [initialized, setInitialized] = useState(false);
-
   if (heroSettings && !initialized) {
     setSlides([
-      { image: heroSettings.hero_1_image || "", title: heroSettings.hero_1_title || "Nouvelle Collection", subtitle: heroSettings.hero_1_subtitle || "Automne / Hiver 2024" },
-      { image: heroSettings.hero_2_image || "", title: heroSettings.hero_2_title || "Style Urbain", subtitle: heroSettings.hero_2_subtitle || "Made in DRC" },
-      { image: heroSettings.hero_3_image || "", title: heroSettings.hero_3_title || "Édition Limitée", subtitle: heroSettings.hero_3_subtitle || "Exclusivité VSM" },
+      { image: heroSettings.hero_1_image || "", title: heroSettings.hero_1_title || "Nouvelle Collection", subtitle: heroSettings.hero_1_subtitle || "" },
+      { image: heroSettings.hero_2_image || "", title: heroSettings.hero_2_title || "Style Urbain", subtitle: heroSettings.hero_2_subtitle || "" },
+      { image: heroSettings.hero_3_image || "", title: heroSettings.hero_3_title || "Édition Limitée", subtitle: heroSettings.hero_3_subtitle || "" },
     ]);
     setInitialized(true);
   }
-
   const [saving, setSaving] = useState(false);
-
   const handleSave = async () => {
     setSaving(true);
     const updates = slides.flatMap((slide, i) => [
@@ -334,32 +264,23 @@ const HeroManager = () => {
       { key: `hero_${i + 1}_title`, value: slide.title },
       { key: `hero_${i + 1}_subtitle`, value: slide.subtitle },
     ]);
-
     for (const item of updates) {
       await supabase.from("settings").upsert({ key: item.key, value: item.value }, { onConflict: "key" });
     }
-
     toast({ title: "Slides héros mises à jour" });
     queryClient.invalidateQueries({ queryKey: ["hero-settings"] });
     setSaving(false);
   };
-
   const updateSlide = (index: number, field: string, value: string) => {
     setSlides(prev => prev.map((s, i) => i === index ? { ...s, [field]: value } : s));
   };
-
   if (isLoading) return <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
-
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
       <div className="flex items-center justify-between">
         <h3 className="font-display text-xl font-bold">Section Héros</h3>
-        <Button onClick={handleSave} disabled={saving} className="gap-2">
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-          Sauvegarder
-        </Button>
+        <Button onClick={handleSave} disabled={saving} className="gap-2">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}Sauvegarder</Button>
       </div>
-
       <div className="grid gap-6">
         {slides.map((slide, i) => (
           <div key={i} className="vsm-card p-6">
@@ -367,14 +288,8 @@ const HeroManager = () => {
             <div className="grid gap-4 md:grid-cols-2">
               <ImageUploader value={slide.image} onChange={(url) => updateSlide(i, "image", url)} folder="hero" />
               <div className="space-y-3">
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">Titre</label>
-                  <Input value={slide.title} onChange={(e) => updateSlide(i, "title", e.target.value)} />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">Sous-titre</label>
-                  <Input value={slide.subtitle} onChange={(e) => updateSlide(i, "subtitle", e.target.value)} />
-                </div>
+                <div className="space-y-1"><label className="text-sm font-medium">Titre</label><Input value={slide.title} onChange={(e) => updateSlide(i, "title", e.target.value)} /></div>
+                <div className="space-y-1"><label className="text-sm font-medium">Sous-titre</label><Input value={slide.subtitle} onChange={(e) => updateSlide(i, "subtitle", e.target.value)} /></div>
               </div>
             </div>
           </div>
@@ -387,75 +302,40 @@ const HeroManager = () => {
 // =================== Promo Form ===================
 const PromoForm = ({ onClose }: { onClose: () => void }) => {
   const queryClient = useQueryClient();
-  const [form, setForm] = useState({
-    code: "", discount_value: "", discount_type: "percent", description: "",
-    max_usage: "", is_global: true, ambassador_id: "",
-  });
+  const [form, setForm] = useState({ code: "", discount_value: "", discount_type: "percent", description: "", max_usage: "", is_global: true, ambassador_id: "" });
   const [saving, setSaving] = useState(false);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.code || !form.discount_value) return;
     setSaving(true);
     const { error } = await supabase.from("promo_codes").insert({
-      code: form.code.toUpperCase(),
-      discount_value: Number(form.discount_value),
-      discount_type: form.discount_type,
-      description: form.description || null,
-      max_usage: form.max_usage ? Number(form.max_usage) : null,
-      is_global: form.is_global,
-      ambassador_id: form.ambassador_id || null,
+      code: form.code.toUpperCase(), discount_value: Number(form.discount_value), discount_type: form.discount_type,
+      description: form.description || null, max_usage: form.max_usage ? Number(form.max_usage) : null,
+      is_global: form.is_global, ambassador_id: form.ambassador_id || null,
     });
-    if (error) {
-      toast({ title: "Erreur", description: error.message, variant: "destructive" });
-    } else {
-      toast({ title: "Code promo créé" });
-      queryClient.invalidateQueries({ queryKey: ["admin-promos"] });
-      onClose();
-    }
+    if (error) toast({ title: "Erreur", description: error.message, variant: "destructive" });
+    else { toast({ title: "Code promo créé" }); queryClient.invalidateQueries({ queryKey: ["admin-promos"] }); onClose(); }
     setSaving(false);
   };
-
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2">
-          <label className="text-sm font-medium">Code *</label>
-          <Input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} placeholder="VSM20" required />
-        </div>
-        <div className="space-y-2">
-          <label className="text-sm font-medium">Valeur *</label>
-          <Input type="number" value={form.discount_value} onChange={(e) => setForm({ ...form, discount_value: e.target.value })} required />
-        </div>
+        <div className="space-y-2"><label className="text-sm font-medium">Code *</label><Input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} placeholder="VSM20" required /></div>
+        <div className="space-y-2"><label className="text-sm font-medium">Valeur *</label><Input type="number" value={form.discount_value} onChange={(e) => setForm({ ...form, discount_value: e.target.value })} required /></div>
         <div className="space-y-2">
           <label className="text-sm font-medium">Type</label>
           <Select value={form.discount_type} onValueChange={(v) => setForm({ ...form, discount_type: v })}>
             <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="percent">Pourcentage (%)</SelectItem>
-              <SelectItem value="fixed">Fixe (FC)</SelectItem>
-            </SelectContent>
+            <SelectContent><SelectItem value="percent">Pourcentage (%)</SelectItem><SelectItem value="fixed">Fixe (FC)</SelectItem></SelectContent>
           </Select>
         </div>
-        <div className="space-y-2">
-          <label className="text-sm font-medium">Max utilisations</label>
-          <Input type="number" value={form.max_usage} onChange={(e) => setForm({ ...form, max_usage: e.target.value })} placeholder="Illimité" />
-        </div>
+        <div className="space-y-2"><label className="text-sm font-medium">Max utilisations</label><Input type="number" value={form.max_usage} onChange={(e) => setForm({ ...form, max_usage: e.target.value })} placeholder="Illimité" /></div>
       </div>
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Description</label>
-        <Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Promo été 2025..." />
-      </div>
-      <div className="flex items-center gap-2">
-        <Switch checked={form.is_global} onCheckedChange={(v) => setForm({ ...form, is_global: v })} />
-        <label className="text-sm">Code global (visible par tous)</label>
-      </div>
+      <div className="space-y-2"><label className="text-sm font-medium">Description</label><Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
+      <div className="flex items-center gap-2"><Switch checked={form.is_global} onCheckedChange={(v) => setForm({ ...form, is_global: v })} /><label className="text-sm">Code global</label></div>
       <div className="flex justify-end gap-2">
         <Button type="button" variant="outline" onClick={onClose}>Annuler</Button>
-        <Button type="submit" disabled={saving} className="gap-2">
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-          Créer
-        </Button>
+        <Button type="submit" disabled={saving} className="gap-2">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}Créer</Button>
       </div>
     </form>
   );
@@ -470,6 +350,7 @@ const AdminDashboard = () => {
   const [editProduct, setEditProduct] = useState<Tables<"products"> | null>(null);
   const [showProductForm, setShowProductForm] = useState(false);
   const [showPromoForm, setShowPromoForm] = useState(false);
+  const [expandedOrder, setExpandedOrder] = useState<number | null>(null);
   const queryClient = useQueryClient();
 
   const { data: products, isLoading: productsLoading } = useAllProducts();
@@ -478,11 +359,23 @@ const AdminDashboard = () => {
   const { data: orders } = useQuery({
     queryKey: ["admin-orders"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("orders").select("*, profiles:customer_id(full_name, email)").order("created_at", { ascending: false });
+      const { data, error } = await supabase.from("orders").select("*").order("created_at", { ascending: false });
       if (error) throw error;
       return data || [];
     },
     enabled: !!user && isAdmin,
+  });
+
+  // Order items for expanded view
+  const { data: orderItems } = useQuery({
+    queryKey: ["admin-order-items", expandedOrder],
+    queryFn: async () => {
+      if (!expandedOrder) return [];
+      const { data, error } = await supabase.from("order_items").select("*").eq("order_id", expandedOrder);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!expandedOrder,
   });
 
   const { data: promoCodes } = useQuery({
@@ -525,77 +418,81 @@ const AdminDashboard = () => {
     enabled: !!user && isAdmin,
   });
 
-  const totalRevenue = (orders || []).reduce((sum, o) => sum + Number(o.total_amount), 0);
-  const totalOrders = (orders || []).length;
+  // Computed stats
+  const allOrders = orders || [];
+  const deliveredOrders = allOrders.filter(o => o.status === "delivered");
+  const pendingOrders = allOrders.filter(o => o.status === "pending");
+  const totalRevenue = deliveredOrders.reduce((sum, o) => sum + Number(o.total_amount), 0);
+  const totalSales = allOrders.reduce((sum, o) => sum + Number(o.total_amount), 0);
+  const totalOrders = allOrders.length;
   const totalProducts = (products || []).length;
   const totalClients = (clients || []).length;
   const pendingApps = (ambassadorApps || []).filter(a => a.status === "pending").length;
 
+  // Low stock products
+  const lowStockProducts = (products || []).filter(p => (p.stock ?? 0) <= 5 && p.is_active);
+
+  // Revenue this month
+  const now = new Date();
+  const thisMonth = allOrders.filter(o => {
+    if (!o.created_at) return false;
+    const d = new Date(o.created_at);
+    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  });
+  const monthRevenue = thisMonth.reduce((s, o) => s + Number(o.total_amount), 0);
+
   const stats = [
-    { label: "Produits", value: totalProducts, icon: Package, color: "text-blue-500" },
-    { label: "Commandes", value: totalOrders, icon: ShoppingCart, color: "text-green-500" },
-    { label: "Clients", value: totalClients, icon: Users, color: "text-primary" },
-    { label: "Revenus", value: formatPrice(totalRevenue), icon: DollarSign, color: "text-yellow-500" },
+    { label: "Commandes", value: totalOrders, sub: `${pendingOrders.length} en attente`, icon: ShoppingCart, color: "text-blue-500" },
+    { label: "Revenus totaux", value: formatPrice(totalSales), sub: `${formatPrice(monthRevenue)} ce mois`, icon: DollarSign, color: "text-green-500" },
+    { label: "Produits", value: totalProducts, sub: `${lowStockProducts.length} stock faible`, icon: Package, color: "text-primary" },
+    { label: "Clients", value: totalClients, sub: `${pendingApps} ambassadeurs en attente`, icon: Users, color: "text-yellow-500" },
   ];
 
-  // Delivery zone form
+  // Handlers
   const [dzForm, setDzForm] = useState({ name: "", city: "", price: "" });
   const handleCreateDZ = async () => {
     if (!dzForm.name) return;
     const { error } = await supabase.from("delivery_zones").insert({ name: dzForm.name, city: dzForm.city || null, price: dzForm.price ? Number(dzForm.price) : null });
     if (error) { toast({ title: "Erreur", description: error.message, variant: "destructive" }); return; }
-    toast({ title: "Zone créée" });
-    setDzForm({ name: "", city: "", price: "" });
+    toast({ title: "Zone créée" }); setDzForm({ name: "", city: "", price: "" });
     queryClient.invalidateQueries({ queryKey: ["admin-delivery"] });
   };
-
   const handleAppStatus = async (id: number, status: string) => {
     const { error } = await supabase.from("ambassador_applications").update({ status }).eq("id", id);
     if (error) { toast({ title: "Erreur", description: error.message, variant: "destructive" }); return; }
     toast({ title: `Candidature ${status === "approved" ? "approuvée" : "refusée"}` });
     queryClient.invalidateQueries({ queryKey: ["admin-ambassadors"] });
   };
-
   const handleOrderStatus = async (id: number, status: string) => {
     const { error } = await supabase.from("orders").update({ status }).eq("id", id);
     if (error) { toast({ title: "Erreur", description: error.message, variant: "destructive" }); return; }
     toast({ title: "Statut mis à jour" });
     queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
   };
-
   const handleTogglePromo = async (id: number, active: boolean) => {
     const { error } = await supabase.from("promo_codes").update({ active }).eq("id", id);
     if (error) { toast({ title: "Erreur", description: error.message, variant: "destructive" }); return; }
-    toast({ title: active ? "Code activé" : "Code désactivé" });
     queryClient.invalidateQueries({ queryKey: ["admin-promos"] });
   };
-
   const handleDeletePromo = async (id: number) => {
     if (!confirm("Supprimer ce code promo ?")) return;
     const { error } = await supabase.from("promo_codes").delete().eq("id", id);
     if (error) { toast({ title: "Erreur", description: error.message, variant: "destructive" }); return; }
-    toast({ title: "Code supprimé" });
     queryClient.invalidateQueries({ queryKey: ["admin-promos"] });
   };
-
   const handleToggleDZ = async (id: number, is_active: boolean) => {
-    const { error } = await supabase.from("delivery_zones").update({ is_active }).eq("id", id);
-    if (error) { toast({ title: "Erreur", description: error.message, variant: "destructive" }); return; }
+    await supabase.from("delivery_zones").update({ is_active }).eq("id", id);
     queryClient.invalidateQueries({ queryKey: ["admin-delivery"] });
   };
-
   const handleDeleteDZ = async (id: number) => {
     if (!confirm("Supprimer cette zone ?")) return;
-    const { error } = await supabase.from("delivery_zones").delete().eq("id", id);
-    if (error) { toast({ title: "Erreur", description: error.message, variant: "destructive" }); return; }
-    toast({ title: "Zone supprimée" });
+    await supabase.from("delivery_zones").delete().eq("id", id);
     queryClient.invalidateQueries({ queryKey: ["admin-delivery"] });
   };
 
   if (authLoading || rolesLoading) {
     return <div className="flex min-h-screen items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
-
   if (!user || !isAdmin) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -624,17 +521,16 @@ const AdminDashboard = () => {
                   className={`flex w-full items-center gap-3 rounded-sm px-4 py-3 text-sm font-medium transition-colors ${activeTab === item.id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-secondary hover:text-foreground"}`}>
                   <item.icon className="h-5 w-5" />
                   {item.label}
-                  {item.id === "ambassadors" && pendingApps > 0 && (
-                    <Badge variant="destructive" className="ml-auto text-[10px]">{pendingApps}</Badge>
-                  )}
+                  {item.id === "ambassadors" && pendingApps > 0 && <Badge variant="destructive" className="ml-auto text-[10px]">{pendingApps}</Badge>}
+                  {item.id === "orders" && pendingOrders.length > 0 && <Badge variant="destructive" className="ml-auto text-[10px]">{pendingOrders.length}</Badge>}
                 </button>
               </li>
             ))}
           </ul>
         </nav>
         <div className="absolute bottom-0 left-0 right-0 space-y-2 border-t border-border p-4">
-          <Button variant="ghost" className="w-full justify-start gap-2 text-muted-foreground" onClick={() => navigate("/mon-compte")}>
-            <Users className="h-5 w-5" />Mon compte client
+          <Button variant="ghost" className="w-full justify-start gap-2 text-muted-foreground" onClick={() => navigate("/")}>
+            <Eye className="h-5 w-5" />Voir le site
           </Button>
           <Button variant="ghost" className="w-full justify-start gap-2" onClick={() => { signOut(); navigate("/"); }}>
             <LogOut className="h-5 w-5" />Déconnexion
@@ -647,7 +543,7 @@ const AdminDashboard = () => {
         <header className="flex h-16 items-center justify-between border-b border-border px-4 lg:px-8">
           <button onClick={() => setSidebarOpen(true)} className="lg:hidden"><Menu className="h-6 w-6" /></button>
           <h2 className="font-display text-lg font-semibold capitalize">{menuItems.find(m => m.id === activeTab)?.label || activeTab}</h2>
-          <span className="text-sm text-muted-foreground">Admin VSM</span>
+          <span className="text-sm text-muted-foreground">{user?.email}</span>
         </header>
 
         <div className="p-4 lg:p-8">
@@ -657,32 +553,64 @@ const AdminDashboard = () => {
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 {stats.map((stat, i) => (
                   <motion.div key={stat.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }} className="vsm-card p-6">
-                    <stat.icon className={`h-8 w-8 ${stat.color}`} />
+                    <div className="flex items-center justify-between">
+                      <stat.icon className={`h-8 w-8 ${stat.color}`} />
+                      <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                    </div>
                     <p className="mt-4 font-display text-2xl font-bold">{stat.value}</p>
                     <p className="text-sm text-muted-foreground">{stat.label}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{stat.sub}</p>
                   </motion.div>
                 ))}
               </div>
 
+              {/* Low stock alert */}
+              {lowStockProducts.length > 0 && (
+                <div className="vsm-card border-yellow-500/50 p-4">
+                  <div className="mb-3 flex items-center gap-2">
+                    <AlertTriangle className="h-5 w-5 text-yellow-500" />
+                    <h3 className="font-display font-semibold">Alertes stock faible</h3>
+                  </div>
+                  <div className="space-y-2">
+                    {lowStockProducts.map(p => (
+                      <div key={p.id} className="flex items-center justify-between rounded-sm bg-yellow-500/10 px-3 py-2">
+                        <div className="flex items-center gap-3">
+                          {p.image_url && <img src={p.image_url} alt="" className="h-8 w-8 rounded-sm object-cover" />}
+                          <span className="text-sm font-medium">{p.name}</span>
+                        </div>
+                        <Badge variant="destructive">{p.stock ?? 0} restant(s)</Badge>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Recent orders */}
               <div className="vsm-card p-6">
-                <h3 className="mb-4 font-display text-lg font-semibold">Commandes récentes</h3>
-                {(orders || []).length === 0 ? (
+                <div className="mb-4 flex items-center justify-between">
+                  <h3 className="font-display text-lg font-semibold">Commandes récentes</h3>
+                  <Button variant="ghost" size="sm" onClick={() => setActiveTab("orders")}>Voir tout</Button>
+                </div>
+                {allOrders.length === 0 ? (
                   <p className="text-muted-foreground">Aucune commande pour le moment.</p>
                 ) : (
                   <div className="space-y-3">
-                    {(orders || []).slice(0, 5).map((order) => (
-                      <div key={order.id} className="flex items-center justify-between rounded-sm border border-border p-3">
-                        <div>
-                          <span className="font-medium">#{order.id}</span>
-                          <span className="ml-2 text-sm text-muted-foreground">{(order as any).profiles?.full_name || "Client"}</span>
+                    {allOrders.slice(0, 5).map((order) => {
+                      const statusInfo = ORDER_STATUSES[order.status] || ORDER_STATUSES.pending;
+                      return (
+                        <div key={order.id} className="flex items-center justify-between rounded-sm border border-border p-3">
+                          <div>
+                            <span className="font-medium">#{order.id}</span>
+                            <span className="ml-2 text-sm text-muted-foreground">{(order as any).customer_name || "Client"}</span>
+                            <span className="ml-2 text-xs text-muted-foreground">{order.created_at ? formatDate(order.created_at) : ""}</span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="font-semibold text-primary">{formatPrice(Number(order.total_amount))}</span>
+                            <span className={`rounded-full px-2 py-1 text-xs font-medium ${statusInfo.color}`}>{statusInfo.label}</span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <span className="font-semibold text-primary">{formatPrice(Number(order.total_amount))}</span>
-                          <Badge variant={order.status === "delivered" ? "default" : "secondary"}>{order.status}</Badge>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -710,13 +638,12 @@ const AdminDashboard = () => {
                   <DialogTrigger asChild>
                     <Button className="gap-2" onClick={() => setEditProduct(null)}><Plus className="h-4 w-4" />Ajouter</Button>
                   </DialogTrigger>
-                  <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                  <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
                     <DialogHeader><DialogTitle>{editProduct ? "Modifier le produit" : "Nouveau produit"}</DialogTitle></DialogHeader>
                     <ProductForm product={editProduct} onClose={() => setShowProductForm(false)} />
                   </DialogContent>
                 </Dialog>
               </div>
-
               {productsLoading ? (
                 <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
               ) : (
@@ -738,17 +665,15 @@ const AdminDashboard = () => {
                           <tr key={product.id} className="border-b border-border last:border-0">
                             <td className="px-4 py-4">
                               <div className="flex items-center gap-3">
-                                {product.image_url ? (
-                                  <img src={product.image_url} alt={product.name} className="h-12 w-12 rounded-sm object-cover" />
-                                ) : (
-                                  <div className="flex h-12 w-12 items-center justify-center rounded-sm bg-secondary"><Image className="h-5 w-5 text-muted-foreground" /></div>
-                                )}
+                                {product.image_url ? <img src={product.image_url} alt={product.name} className="h-12 w-12 rounded-sm object-cover" /> : <div className="flex h-12 w-12 items-center justify-center rounded-sm bg-secondary"><Image className="h-5 w-5 text-muted-foreground" /></div>}
                                 <span className="font-medium">{product.name}</span>
                               </div>
                             </td>
                             <td className="px-4 py-4 capitalize text-muted-foreground">{product.category || "—"}</td>
                             <td className="px-4 py-4 font-semibold text-primary">{product.price ? formatPrice(Number(product.price)) : "—"}</td>
-                            <td className="px-4 py-4">{product.stock ?? 0}</td>
+                            <td className="px-4 py-4">
+                              <span className={`font-medium ${(product.stock ?? 0) <= 5 ? "text-red-500" : ""}`}>{product.stock ?? 0}</span>
+                            </td>
                             <td className="px-4 py-4">
                               <span className={`rounded-full px-2 py-1 text-xs font-medium ${product.is_active ? "bg-green-500/20 text-green-500" : "bg-red-500/20 text-red-500"}`}>
                                 {product.is_active ? "Actif" : "Inactif"}
@@ -756,16 +681,12 @@ const AdminDashboard = () => {
                             </td>
                             <td className="px-4 py-4">
                               <div className="flex justify-end gap-2">
-                                <button className="rounded-sm p-2 hover:bg-secondary" onClick={() => { setEditProduct(product); setShowProductForm(true); }}>
-                                  <Edit className="h-4 w-4 text-muted-foreground" />
-                                </button>
+                                <button className="rounded-sm p-2 hover:bg-secondary" onClick={() => { setEditProduct(product); setShowProductForm(true); }}><Edit className="h-4 w-4 text-muted-foreground" /></button>
                                 <button className="rounded-sm p-2 hover:bg-destructive/20" onClick={async () => {
                                   if (confirm("Supprimer ce produit ?")) {
                                     try { await deleteProduct.mutateAsync(product.id); toast({ title: "Produit supprimé" }); } catch (err: any) { toast({ title: "Erreur", description: err.message, variant: "destructive" }); }
                                   }
-                                }}>
-                                  <Trash2 className="h-4 w-4 text-destructive" />
-                                </button>
+                                }}><Trash2 className="h-4 w-4 text-destructive" /></button>
                               </div>
                             </td>
                           </tr>
@@ -782,7 +703,15 @@ const AdminDashboard = () => {
           {/* ============ ORDERS ============ */}
           {activeTab === "orders" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-              <h3 className="font-display text-xl font-bold">Commandes</h3>
+              <div className="flex items-center justify-between">
+                <h3 className="font-display text-xl font-bold">Commandes ({allOrders.length})</h3>
+                <div className="flex gap-2">
+                  {Object.entries(ORDER_STATUSES).map(([key, val]) => {
+                    const count = allOrders.filter(o => o.status === key).length;
+                    return count > 0 ? <Badge key={key} variant="secondary" className="gap-1">{val.label} <span className="font-bold">{count}</span></Badge> : null;
+                  })}
+                </div>
+              </div>
               <div className="vsm-card overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full">
@@ -790,33 +719,94 @@ const AdminDashboard = () => {
                       <tr>
                         <th className="px-4 py-3 text-left text-sm font-semibold">#</th>
                         <th className="px-4 py-3 text-left text-sm font-semibold">Client</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold">Adresse</th>
                         <th className="px-4 py-3 text-left text-sm font-semibold">Total</th>
                         <th className="px-4 py-3 text-left text-sm font-semibold">Statut</th>
                         <th className="px-4 py-3 text-left text-sm font-semibold">Date</th>
+                        <th className="px-4 py-3 text-right text-sm font-semibold">Détails</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {(orders || []).map((order) => (
-                        <tr key={order.id} className="border-b border-border last:border-0">
-                          <td className="px-4 py-4 font-medium">#{order.id}</td>
-                          <td className="px-4 py-4 text-muted-foreground">{(order as any).profiles?.full_name || (order as any).profiles?.email || "—"}</td>
-                          <td className="px-4 py-4 font-semibold text-primary">{formatPrice(Number(order.total_amount))}</td>
-                          <td className="px-4 py-4">
-                            <Select value={order.status} onValueChange={(v) => handleOrderStatus(order.id, v)}>
-                              <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                {["pending", "confirmed", "shipped", "delivered", "cancelled"].map((s) => (
-                                  <SelectItem key={s} value={s}>{s}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </td>
-                          <td className="px-4 py-4 text-sm text-muted-foreground">{order.created_at ? new Date(order.created_at).toLocaleDateString("fr-FR") : "—"}</td>
-                        </tr>
-                      ))}
+                      {allOrders.map((order) => {
+                        const statusInfo = ORDER_STATUSES[order.status] || ORDER_STATUSES.pending;
+                        const isExpanded = expandedOrder === order.id;
+                        return (
+                          <>
+                            <tr key={order.id} className="border-b border-border last:border-0">
+                              <td className="px-4 py-4 font-medium">#{order.id}</td>
+                              <td className="px-4 py-4">
+                                <div>
+                                  <p className="font-medium">{(order as any).customer_name || "—"}</p>
+                                  <p className="flex items-center gap-1 text-xs text-muted-foreground"><Phone className="h-3 w-3" />{(order as any).customer_phone || "—"}</p>
+                                </div>
+                              </td>
+                              <td className="px-4 py-4 text-sm text-muted-foreground">
+                                <div className="flex items-center gap-1"><MapPin className="h-3 w-3" />{(order as any).delivery_address || "—"}</div>
+                              </td>
+                              <td className="px-4 py-4 font-semibold text-primary">{formatPrice(Number(order.total_amount))}</td>
+                              <td className="px-4 py-4">
+                                <Select value={order.status} onValueChange={(v) => handleOrderStatus(order.id, v)}>
+                                  <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    {Object.entries(ORDER_STATUSES).map(([key, val]) => <SelectItem key={key} value={key}>{val.label}</SelectItem>)}
+                                  </SelectContent>
+                                </Select>
+                              </td>
+                              <td className="px-4 py-4 text-sm text-muted-foreground">{order.created_at ? formatDate(order.created_at) : "—"}</td>
+                              <td className="px-4 py-4 text-right">
+                                <Button variant="ghost" size="sm" onClick={() => setExpandedOrder(isExpanded ? null : order.id)}>
+                                  {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                                </Button>
+                              </td>
+                            </tr>
+                            {isExpanded && (
+                              <tr key={`${order.id}-detail`}>
+                                <td colSpan={7} className="bg-secondary/50 px-4 py-4">
+                                  <div className="space-y-3">
+                                    <h4 className="text-sm font-semibold">Articles de la commande</h4>
+                                    {orderItems && orderItems.length > 0 ? (
+                                      <div className="space-y-2">
+                                        {orderItems.map((item: any) => (
+                                          <div key={item.id} className="flex items-center justify-between rounded-sm border border-border bg-background px-3 py-2">
+                                            <div>
+                                              <span className="font-medium">{item.product_name}</span>
+                                              {item.color && <span className="ml-2 text-xs text-muted-foreground">Couleur: {item.color}</span>}
+                                              {item.size && <span className="ml-2 text-xs text-muted-foreground">Taille: {item.size}</span>}
+                                            </div>
+                                            <div className="text-right">
+                                              <span className="text-sm">x{item.quantity}</span>
+                                              <span className="ml-3 font-semibold text-primary">{formatPrice(Number(item.unit_price) * item.quantity)}</span>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <p className="text-sm text-muted-foreground">Chargement des articles...</p>
+                                    )}
+                                    <div className="grid gap-2 text-sm sm:grid-cols-3">
+                                      {(order as any).delivery_date && (
+                                        <div className="flex items-center gap-1 text-muted-foreground"><Calendar className="h-3 w-3" />Livraison: {(order as any).delivery_date}</div>
+                                      )}
+                                      {(order as any).delivery_fee > 0 && (
+                                        <div className="text-muted-foreground">Frais livraison: {formatPrice(Number((order as any).delivery_fee))}</div>
+                                      )}
+                                      {(order as any).promo_discount > 0 && (
+                                        <div className="text-muted-foreground">Réduction: -{formatPrice(Number((order as any).promo_discount))}</div>
+                                      )}
+                                    </div>
+                                    {(order as any).notes && (
+                                      <p className="text-sm text-muted-foreground">📝 {(order as any).notes}</p>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </>
+                        );
+                      })}
                     </tbody>
                   </table>
-                  {(orders || []).length === 0 && <p className="py-8 text-center text-muted-foreground">Aucune commande.</p>}
+                  {allOrders.length === 0 && <p className="py-8 text-center text-muted-foreground">Aucune commande.</p>}
                 </div>
               </div>
             </motion.div>
@@ -838,29 +828,21 @@ const AdminDashboard = () => {
               </div>
               <div className="vsm-card overflow-hidden">
                 <table className="w-full">
-                  <thead className="border-b border-border bg-secondary">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-sm font-semibold">Zone</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold">Ville</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold">Prix</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold">Actif</th>
-                      <th className="px-4 py-3 text-right text-sm font-semibold">Actions</th>
-                    </tr>
-                  </thead>
+                  <thead className="border-b border-border bg-secondary"><tr>
+                    <th className="px-4 py-3 text-left text-sm font-semibold">Zone</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold">Ville</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold">Prix</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold">Actif</th>
+                    <th className="px-4 py-3 text-right text-sm font-semibold">Actions</th>
+                  </tr></thead>
                   <tbody>
                     {(deliveryZones || []).map((dz) => (
                       <tr key={dz.id} className="border-b border-border last:border-0">
                         <td className="px-4 py-4 font-medium">{dz.name}</td>
                         <td className="px-4 py-4 text-muted-foreground">{dz.city || "—"}</td>
                         <td className="px-4 py-4">{dz.price ? formatPrice(Number(dz.price)) : "—"}</td>
-                        <td className="px-4 py-4">
-                          <Switch checked={dz.is_active} onCheckedChange={(v) => handleToggleDZ(dz.id, v)} />
-                        </td>
-                        <td className="px-4 py-4 text-right">
-                          <button className="rounded-sm p-2 hover:bg-destructive/20" onClick={() => handleDeleteDZ(dz.id)}>
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </button>
-                        </td>
+                        <td className="px-4 py-4"><Switch checked={dz.is_active} onCheckedChange={(v) => handleToggleDZ(dz.id, v)} /></td>
+                        <td className="px-4 py-4 text-right"><button className="rounded-sm p-2 hover:bg-destructive/20" onClick={() => handleDeleteDZ(dz.id)}><Trash2 className="h-4 w-4 text-destructive" /></button></td>
                       </tr>
                     ))}
                   </tbody>
@@ -876,46 +858,29 @@ const AdminDashboard = () => {
               <div className="flex items-center justify-between">
                 <h3 className="font-display text-xl font-bold">Codes Promo</h3>
                 <Dialog open={showPromoForm} onOpenChange={setShowPromoForm}>
-                  <DialogTrigger asChild>
-                    <Button className="gap-2"><Plus className="h-4 w-4" />Nouveau code</Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-lg">
-                    <DialogHeader><DialogTitle>Créer un code promo</DialogTitle></DialogHeader>
-                    <PromoForm onClose={() => setShowPromoForm(false)} />
-                  </DialogContent>
+                  <DialogTrigger asChild><Button className="gap-2"><Plus className="h-4 w-4" />Nouveau code</Button></DialogTrigger>
+                  <DialogContent className="max-w-lg"><DialogHeader><DialogTitle>Créer un code promo</DialogTitle></DialogHeader><PromoForm onClose={() => setShowPromoForm(false)} /></DialogContent>
                 </Dialog>
               </div>
               <div className="vsm-card overflow-hidden">
                 <table className="w-full">
-                  <thead className="border-b border-border bg-secondary">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-sm font-semibold">Code</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold">Réduction</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold">Utilisations</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold">Type</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold">Actif</th>
-                      <th className="px-4 py-3 text-right text-sm font-semibold">Actions</th>
-                    </tr>
-                  </thead>
+                  <thead className="border-b border-border bg-secondary"><tr>
+                    <th className="px-4 py-3 text-left text-sm font-semibold">Code</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold">Réduction</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold">Utilisations</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold">Type</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold">Actif</th>
+                    <th className="px-4 py-3 text-right text-sm font-semibold">Actions</th>
+                  </tr></thead>
                   <tbody>
                     {(promoCodes || []).map((promo) => (
                       <tr key={promo.id} className="border-b border-border last:border-0">
                         <td className="px-4 py-4 font-medium text-primary">{promo.code}</td>
                         <td className="px-4 py-4">{promo.discount_type === "percent" ? `${promo.discount_value}%` : formatPrice(Number(promo.discount_value))}</td>
                         <td className="px-4 py-4">{promo.usage_count}{promo.max_usage ? `/${promo.max_usage}` : ""}</td>
-                        <td className="px-4 py-4">
-                          <Badge variant={promo.is_global ? "default" : "secondary"}>
-                            {promo.is_global ? "Global" : "Ambassadeur"}
-                          </Badge>
-                        </td>
-                        <td className="px-4 py-4">
-                          <Switch checked={promo.active} onCheckedChange={(v) => handleTogglePromo(promo.id, v)} />
-                        </td>
-                        <td className="px-4 py-4 text-right">
-                          <button className="rounded-sm p-2 hover:bg-destructive/20" onClick={() => handleDeletePromo(promo.id)}>
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </button>
-                        </td>
+                        <td className="px-4 py-4"><Badge variant={promo.is_global ? "default" : "secondary"}>{promo.is_global ? "Global" : "Ambassadeur"}</Badge></td>
+                        <td className="px-4 py-4"><Switch checked={promo.active} onCheckedChange={(v) => handleTogglePromo(promo.id, v)} /></td>
+                        <td className="px-4 py-4 text-right"><button className="rounded-sm p-2 hover:bg-destructive/20" onClick={() => handleDeletePromo(promo.id)}><Trash2 className="h-4 w-4 text-destructive" /></button></td>
                       </tr>
                     ))}
                   </tbody>
@@ -931,19 +896,19 @@ const AdminDashboard = () => {
               <h3 className="font-display text-xl font-bold">Candidatures Ambassadeurs</h3>
               <div className="vsm-card overflow-hidden">
                 <table className="w-full">
-                  <thead className="border-b border-border bg-secondary">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-sm font-semibold">Nom</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold">Plateforme</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold">Username</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold">Statut</th>
-                      <th className="px-4 py-3 text-right text-sm font-semibold">Actions</th>
-                    </tr>
-                  </thead>
+                  <thead className="border-b border-border bg-secondary"><tr>
+                    <th className="px-4 py-3 text-left text-sm font-semibold">Nom</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold">Téléphone</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold">Plateforme</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold">Username</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold">Statut</th>
+                    <th className="px-4 py-3 text-right text-sm font-semibold">Actions</th>
+                  </tr></thead>
                   <tbody>
                     {(ambassadorApps || []).map((app) => (
                       <tr key={app.id} className="border-b border-border last:border-0">
                         <td className="px-4 py-4 font-medium">{app.full_name}</td>
+                        <td className="px-4 py-4 text-muted-foreground">{app.phone}</td>
                         <td className="px-4 py-4">{app.main_platform}</td>
                         <td className="px-4 py-4 text-primary">@{app.username}</td>
                         <td className="px-4 py-4">
@@ -955,12 +920,8 @@ const AdminDashboard = () => {
                           <div className="flex justify-end gap-2">
                             {app.status === "pending" && (
                               <>
-                                <Button size="sm" variant="outline" className="text-green-500" onClick={() => handleAppStatus(app.id, "approved")}>
-                                  <Check className="h-4 w-4" />
-                                </Button>
-                                <Button size="sm" variant="outline" className="text-red-500" onClick={() => handleAppStatus(app.id, "rejected")}>
-                                  <XCircle className="h-4 w-4" />
-                                </Button>
+                                <Button size="sm" variant="outline" className="text-green-500" onClick={() => handleAppStatus(app.id, "approved")}><Check className="h-4 w-4" /></Button>
+                                <Button size="sm" variant="outline" className="text-red-500" onClick={() => handleAppStatus(app.id, "rejected")}><XCircle className="h-4 w-4" /></Button>
                               </>
                             )}
                           </div>
@@ -977,18 +938,16 @@ const AdminDashboard = () => {
           {/* ============ CLIENTS ============ */}
           {activeTab === "clients" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-              <h3 className="font-display text-xl font-bold">Clients</h3>
+              <h3 className="font-display text-xl font-bold">Clients ({totalClients})</h3>
               <div className="vsm-card overflow-hidden">
                 <table className="w-full">
-                  <thead className="border-b border-border bg-secondary">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-sm font-semibold">Nom</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold">Email</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold">Téléphone</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold">Rôle</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold">Inscription</th>
-                    </tr>
-                  </thead>
+                  <thead className="border-b border-border bg-secondary"><tr>
+                    <th className="px-4 py-3 text-left text-sm font-semibold">Nom</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold">Email</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold">Téléphone</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold">Rôle</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold">Inscription</th>
+                  </tr></thead>
                   <tbody>
                     {(clients || []).map((client) => (
                       <tr key={client.id} className="border-b border-border last:border-0">
