@@ -403,11 +403,15 @@ const AdminDashboard = () => {
   const { data: promoCodes } = useQuery({
     queryKey: ["admin-promos"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("promo_codes").select("*").order("created_at", { ascending: false });
+      const { data, error } = await supabase
+        .from("promo_codes")
+        .select("*")
+        .order("created_at", { ascending: false });
       if (error) throw error;
       return data || [];
     },
     enabled: !!user && isAdmin,
+    refetchInterval: 20000,
   });
 
   const { data: deliveryZones } = useQuery({
