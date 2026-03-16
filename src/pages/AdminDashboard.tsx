@@ -258,9 +258,9 @@ const HeroManager = () => {
   const [initialized, setInitialized] = useState(false);
   if (heroSettings && !initialized) {
     setSlides([
-      { image: heroSettings.hero_1_image || "", title: heroSettings.hero_1_title || "Nouvelle Collection", subtitle: heroSettings.hero_1_subtitle || "" },
-      { image: heroSettings.hero_2_image || "", title: heroSettings.hero_2_title || "Style Urbain", subtitle: heroSettings.hero_2_subtitle || "" },
-      { image: heroSettings.hero_3_image || "", title: heroSettings.hero_3_title || "Édition Limitée", subtitle: heroSettings.hero_3_subtitle || "" },
+      { image: heroSettings.hero_1_image || "", title: heroSettings.hero_1_title || "", subtitle: heroSettings.hero_1_subtitle || "" },
+      { image: heroSettings.hero_2_image || "", title: heroSettings.hero_2_title || "", subtitle: heroSettings.hero_2_subtitle || "" },
+      { image: heroSettings.hero_3_image || "", title: heroSettings.hero_3_title || "", subtitle: heroSettings.hero_3_subtitle || "" },
     ]);
     setInitialized(true);
   }
