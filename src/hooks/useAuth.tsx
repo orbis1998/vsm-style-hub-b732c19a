@@ -43,10 +43,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     );
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session }, error }) => {
+      if (error && (error as any).code === "refresh_token_not_found") {
+        await supabase.auth.signOut({ scope: "local" });
+        setSession(null);
+        setUser(null);
+        setRoles([]);
+        setRolesLoading(false);
+        setLoading(false);
+        return;
+      }
+
       setSession(session);
       setUser(session?.user ?? null);
-      
+
       if (session?.user) {
         fetchUserRoles(session.user.id);
       } else {

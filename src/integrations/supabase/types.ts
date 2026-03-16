@@ -513,6 +513,22 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_order_with_items: {
+        Args: {
+          _customer_id: string
+          _customer_name: string
+          _customer_phone: string
+          _delivery_address: string
+          _delivery_date: string
+          _delivery_fee: number
+          _items: Json
+          _notes: string
+          _promo_code_id: number
+          _promo_discount: number
+          _total_amount: number
+        }
+        Returns: number
+      }
       has_role: { Args: { _role: string; _user_id: string }; Returns: boolean }
       is_admin: { Args: never; Returns: boolean }
     }

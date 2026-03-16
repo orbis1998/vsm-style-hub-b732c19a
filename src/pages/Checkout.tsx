@@ -105,7 +105,12 @@ const Checkout = () => {
       // Look up promo_code_id if promo applied
       let promoCodeId: number | null = null;
       if (promoCode) {
-        const { data: promoData } = await supabase.from("promo_codes").select("id").eq("code", promoCode).single();
+        const { data: promoData } = await supabase
+          .from("promo_codes")
+          .select("id")
+          .eq("code", promoCode)
+          .maybeSingle();
+
         if (promoData) promoCodeId = promoData.id;
       }
 
@@ -113,26 +118,7 @@ const Checkout = () => {
         ? `${formData.commune}, Kinshasa`
         : `${formData.city}, ${formData.province}`;
 
-      // 1. Create order in DB
-      const { data: orderData, error: orderError } = await supabase.from("orders").insert({
-        customer_id: user?.id || null,
-        customer_name: formData.fullName,
-        customer_phone: formData.phone,
-        delivery_address: deliveryAddr,
-        delivery_date: formData.deliveryDate || null,
-        delivery_fee: deliveryFee,
-        notes: formData.instructions || null,
-        promo_code_id: promoCodeId,
-        promo_discount: promoDiscount,
-        total_amount: totalWithDelivery,
-        status: "pending",
-      }).select("id").single();
-
-      if (orderError) throw orderError;
-
-      // 2. Create order items (triggers stock decrement automatically)
-      const orderItems = items.map((item) => ({
-        order_id: orderData.id,
+      const orderItemsPayload = items.map((item) => ({
         product_id: Number(item.id),
         product_name: item.name,
         size: item.size || null,
@@ -141,10 +127,31 @@ const Checkout = () => {
         unit_price: item.price,
       }));
 
-      const { error: itemsError } = await supabase.from("order_items").insert(orderItems);
-      if (itemsError) throw itemsError;
+      const { data: orderId, error: orderError } = await (supabase as any).rpc(
+        "create_order_with_items",
+        {
+          _customer_id: user?.id || null,
+          _customer_name: formData.fullName,
+          _customer_phone: formData.phone,
+          _delivery_address: deliveryAddr,
+          _delivery_date: formData.deliveryDate || null,
+          _delivery_fee: deliveryFee,
+          _notes: formData.instructions || null,
+          _promo_code_id: promoCodeId,
+          _promo_discount: promoDiscount,
+          _total_amount: totalWithDelivery,
+          _items: orderItemsPayload,
+        }
+      );
 
-      // 3. Build WhatsApp message
+      if (orderError) throw orderError;
+
+      const savedOrderId = Number(orderId);
+      if (!savedOrderId) {
+        throw new Error("Commande créée mais identifiant introuvable.");
+      }
+
+      // Build WhatsApp message
       const productList = items
         .map(
           (item) =>
@@ -159,15 +166,15 @@ const Checkout = () => {
       const deliveryInfo = isFreeDelivery
         ? `🎁 Livraison OFFERTE (commande > ${formatPrice(FREE_DELIVERY_THRESHOLD_FC)})`
         : isKinshasa
-        ? `🚚 Frais de livraison: ${formatPrice(deliveryFee)}`
-        : `🚚 Livraison via agence partenaire`;
+          ? `🚚 Frais de livraison: ${formatPrice(deliveryFee)}`
+          : `🚚 Livraison via agence partenaire`;
 
       const deliveryDateInfo = formData.deliveryDate
         ? `📅 Date souhaitée: ${new Date(formData.deliveryDate).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}`
         : "";
 
       const message = encodeURIComponent(
-        `🛍️ *NOUVELLE COMMANDE VSM #${orderData.id}*\n\n` +
+        `🛍️ *NOUVELLE COMMANDE VSM #${savedOrderId}*\n\n` +
           `👤 *Client:* ${formData.fullName}\n` +
           `📞 *Téléphone:* ${formData.phone}\n` +
           `${locationInfo}\n` +
@@ -182,14 +189,23 @@ const Checkout = () => {
       );
 
       const whatsappNumber = "243976028479";
-      window.open(`https://wa.me/${whatsappNumber}?text=${message}`, "_blank");
+      const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${message}`;
 
       clearCart();
-      toast({ title: "Commande enregistrée!", description: `Commande #${orderData.id} créée avec succès.` });
-      navigate("/");
+      toast({
+        title: "Commande enregistrée!",
+        description: `Commande #${savedOrderId} créée avec succès.`,
+      });
+
+      // Redirection robuste (évite le blocage popup sur mobile)
+      window.location.assign(whatsappUrl);
     } catch (err: any) {
       console.error("Order error:", err);
-      toast({ title: "Erreur", description: err.message || "Impossible de créer la commande.", variant: "destructive" });
+      toast({
+        title: "Erreur",
+        description: err.message || "Impossible de créer la commande.",
+        variant: "destructive",
+      });
     } finally {
       setIsSubmitting(false);
     }

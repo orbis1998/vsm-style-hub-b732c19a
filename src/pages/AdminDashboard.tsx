@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -78,14 +78,22 @@ const ProductForm = ({ product, onClose }: { product?: Tables<"products"> | null
   const [newStock, setNewStock] = useState("0");
   const [variantsLoaded, setVariantsLoaded] = useState(!product);
 
-  useState(() => {
-    if (product) {
-      supabase.from("product_variants").select("*").eq("product_id", product.id).then(({ data }) => {
-        if (data) setVariants(data.map((v: any) => ({ color: v.color, size: v.size, stock: v.stock })));
+  useEffect(() => {
+    if (!product) return;
+
+    supabase
+      .from("product_variants")
+      .select("*")
+      .eq("product_id", product.id)
+      .then(({ data }) => {
+        if (data) {
+          setVariants(
+            data.map((v: any) => ({ color: v.color, size: v.size, stock: v.stock }))
+          );
+        }
         setVariantsLoaded(true);
       });
-    }
-  });
+  }, [product]);
 
   const addVariant = () => {
     if (!newColor || !newSize) return;
@@ -247,15 +255,29 @@ const HeroManager = () => {
     },
   });
   const [slides, setSlides] = useState<{ image: string; title: string; subtitle: string }[]>([]);
-  const [initialized, setInitialized] = useState(false);
-  if (heroSettings && !initialized) {
+
+  useEffect(() => {
+    if (!heroSettings) return;
+
     setSlides([
-      { image: heroSettings.hero_1_image || "", title: heroSettings.hero_1_title || "Nouvelle Collection", subtitle: heroSettings.hero_1_subtitle || "" },
-      { image: heroSettings.hero_2_image || "", title: heroSettings.hero_2_title || "Style Urbain", subtitle: heroSettings.hero_2_subtitle || "" },
-      { image: heroSettings.hero_3_image || "", title: heroSettings.hero_3_title || "Édition Limitée", subtitle: heroSettings.hero_3_subtitle || "" },
+      {
+        image: heroSettings.hero_1_image || "",
+        title: heroSettings.hero_1_title || "",
+        subtitle: heroSettings.hero_1_subtitle || "",
+      },
+      {
+        image: heroSettings.hero_2_image || "",
+        title: heroSettings.hero_2_title || "",
+        subtitle: heroSettings.hero_2_subtitle || "",
+      },
+      {
+        image: heroSettings.hero_3_image || "",
+        title: heroSettings.hero_3_title || "",
+        subtitle: heroSettings.hero_3_subtitle || "",
+      },
     ]);
-    setInitialized(true);
-  }
+  }, [heroSettings]);
+
   const [saving, setSaving] = useState(false);
   const handleSave = async () => {
     setSaving(true);
@@ -264,15 +286,22 @@ const HeroManager = () => {
       { key: `hero_${i + 1}_title`, value: slide.title },
       { key: `hero_${i + 1}_subtitle`, value: slide.subtitle },
     ]);
+
     for (const item of updates) {
-      await supabase.from("settings").upsert({ key: item.key, value: item.value }, { onConflict: "key" });
+      await supabase
+        .from("settings")
+        .upsert({ key: item.key, value: item.value }, { onConflict: "key" });
     }
+
     toast({ title: "Slides héros mises à jour" });
     queryClient.invalidateQueries({ queryKey: ["hero-settings"] });
     setSaving(false);
   };
+
   const updateSlide = (index: number, field: string, value: string) => {
-    setSlides(prev => prev.map((s, i) => i === index ? { ...s, [field]: value } : s));
+    setSlides((prev) =>
+      prev.map((s, i) => (i === index ? { ...s, [field]: value } : s))
+    );
   };
   if (isLoading) return <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   return (
@@ -359,93 +388,231 @@ const AdminDashboard = () => {
   const { data: orders } = useQuery({
     queryKey: ["admin-orders"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("orders").select("*").order("created_at", { ascending: false });
+      const { data, error } = await supabase
+        .from("orders")
+        .select("*")
+        .order("created_at", { ascending: false });
       if (error) throw error;
       return data || [];
     },
     enabled: !!user && isAdmin,
+    refetchInterval: 15000,
   });
 
-  // Order items for expanded view
-  const { data: orderItems } = useQuery({
-    queryKey: ["admin-order-items", expandedOrder],
+  const { data: allOrderItems } = useQuery({
+    queryKey: ["admin-order-items"],
     queryFn: async () => {
-      if (!expandedOrder) return [];
-      const { data, error } = await supabase.from("order_items").select("*").eq("order_id", expandedOrder);
+      const { data, error } = await supabase.from("order_items").select("*");
       if (error) throw error;
       return data || [];
     },
-    enabled: !!expandedOrder,
+    enabled: !!user && isAdmin,
+    refetchInterval: 15000,
+  });
+
+  const { data: variants } = useQuery({
+    queryKey: ["admin-variants"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("product_variants").select("*");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!user && isAdmin,
+    refetchInterval: 15000,
   });
 
   const { data: promoCodes } = useQuery({
     queryKey: ["admin-promos"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("promo_codes").select("*").order("created_at", { ascending: false });
+      const { data, error } = await supabase
+        .from("promo_codes")
+        .select("*")
+        .order("created_at", { ascending: false });
       if (error) throw error;
       return data || [];
     },
     enabled: !!user && isAdmin,
+    refetchInterval: 20000,
   });
 
   const { data: deliveryZones } = useQuery({
     queryKey: ["admin-delivery"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("delivery_zones").select("*").order("name");
+      const { data, error } = await supabase
+        .from("delivery_zones")
+        .select("*")
+        .order("name");
       if (error) throw error;
       return data || [];
     },
     enabled: !!user && isAdmin,
+    refetchInterval: 30000,
   });
 
   const { data: ambassadorApps } = useQuery({
     queryKey: ["admin-ambassadors"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("ambassador_applications").select("*").order("created_at", { ascending: false });
+      const { data, error } = await supabase
+        .from("ambassador_applications")
+        .select("*")
+        .order("created_at", { ascending: false });
       if (error) throw error;
       return data || [];
     },
     enabled: !!user && isAdmin,
+    refetchInterval: 20000,
   });
 
   const { data: clients } = useQuery({
     queryKey: ["admin-clients"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("profiles").select("*").order("created_at", { ascending: false });
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .order("created_at", { ascending: false });
       if (error) throw error;
       return data || [];
     },
     enabled: !!user && isAdmin,
+    refetchInterval: 30000,
   });
 
-  // Computed stats
+  // Computed stats (100% basés DB)
   const allOrders = orders || [];
-  const deliveredOrders = allOrders.filter(o => o.status === "delivered");
-  const pendingOrders = allOrders.filter(o => o.status === "pending");
-  const totalRevenue = deliveredOrders.reduce((sum, o) => sum + Number(o.total_amount), 0);
+  const allItems = allOrderItems || [];
+  const allVariants = variants || [];
+
+  const orderItemsByOrder = useMemo(() => {
+    return allItems.reduce<Record<number, any[]>>((acc, item) => {
+      if (!acc[item.order_id]) acc[item.order_id] = [];
+      acc[item.order_id].push(item);
+      return acc;
+    }, {});
+  }, [allItems]);
+
+  const pendingOrders = allOrders.filter((o) => o.status === "pending");
   const totalSales = allOrders.reduce((sum, o) => sum + Number(o.total_amount), 0);
   const totalOrders = allOrders.length;
   const totalProducts = (products || []).length;
   const totalClients = (clients || []).length;
-  const pendingApps = (ambassadorApps || []).filter(a => a.status === "pending").length;
+  const pendingApps = (ambassadorApps || []).filter((a) => a.status === "pending").length;
+  const soldUnits = allItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+  const inventoryUnits = allVariants.reduce((sum, variant) => sum + Number(variant.stock || 0), 0);
 
-  // Low stock products
-  const lowStockProducts = (products || []).filter(p => (p.stock ?? 0) <= 5 && p.is_active);
+  // Low stock
+  const lowStockProducts = (products || []).filter(
+    (p) => (p.stock ?? 0) <= 5 && p.is_active
+  );
+  const lowStockVariants = allVariants.filter((variant) => Number(variant.stock) <= 3);
 
   // Revenue this month
   const now = new Date();
-  const thisMonth = allOrders.filter(o => {
+  const thisMonth = allOrders.filter((o) => {
     if (!o.created_at) return false;
     const d = new Date(o.created_at);
     return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
   });
   const monthRevenue = thisMonth.reduce((s, o) => s + Number(o.total_amount), 0);
 
+  const topSellingProducts = useMemo(() => {
+    const namesById = new Map<number, string>();
+    (products || []).forEach((product) => {
+      namesById.set(product.id, product.name);
+    });
+
+    const soldByProduct = new Map<number, number>();
+    allItems.forEach((item) => {
+      const productId = Number(item.product_id);
+      if (!productId) return;
+      soldByProduct.set(
+        productId,
+        (soldByProduct.get(productId) || 0) + Number(item.quantity || 0)
+      );
+    });
+
+    return Array.from(soldByProduct.entries())
+      .map(([productId, qty]) => ({
+        productId,
+        qty,
+        name: namesById.get(productId) || `Produit #${productId}`,
+      }))
+      .sort((a, b) => b.qty - a.qty)
+      .slice(0, 5);
+  }, [allItems, products]);
+
+  // Realtime + polling fallback
+  useEffect(() => {
+    if (!user || !isAdmin) return;
+
+    const invalidateAll = () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-order-items"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-variants"] });
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["products", "all"] });
+    };
+
+    const channel = supabase
+      .channel("admin-dashboard-live")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "orders" },
+        invalidateAll
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "order_items" },
+        invalidateAll
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "products" },
+        invalidateAll
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "product_variants" },
+        invalidateAll
+      )
+      .subscribe();
+
+    const poller = window.setInterval(invalidateAll, 20000);
+
+    return () => {
+      window.clearInterval(poller);
+      supabase.removeChannel(channel);
+    };
+  }, [user, isAdmin, queryClient]);
+
   const stats = [
-    { label: "Commandes", value: totalOrders, sub: `${pendingOrders.length} en attente`, icon: ShoppingCart, color: "text-blue-500" },
-    { label: "Revenus totaux", value: formatPrice(totalSales), sub: `${formatPrice(monthRevenue)} ce mois`, icon: DollarSign, color: "text-green-500" },
-    { label: "Produits", value: totalProducts, sub: `${lowStockProducts.length} stock faible`, icon: Package, color: "text-primary" },
-    { label: "Clients", value: totalClients, sub: `${pendingApps} ambassadeurs en attente`, icon: Users, color: "text-yellow-500" },
+    {
+      label: "Revenus",
+      value: formatPrice(totalSales),
+      sub: `${formatPrice(monthRevenue)} ce mois`,
+      icon: DollarSign,
+      color: "text-primary",
+    },
+    {
+      label: "Commandes",
+      value: totalOrders,
+      sub: `${pendingOrders.length} en attente`,
+      icon: ShoppingCart,
+      color: "text-primary",
+    },
+    {
+      label: "Articles vendus",
+      value: soldUnits,
+      sub: `${inventoryUnits} restants`,
+      icon: Package,
+      color: "text-primary",
+    },
+    {
+      label: "Clients",
+      value: totalClients,
+      sub: `${pendingApps} demandes ambassadeur`,
+      icon: Users,
+      color: "text-primary",
+    },
   ];
 
   // Handlers
@@ -584,6 +751,48 @@ const AdminDashboard = () => {
                   </div>
                 </div>
               )}
+
+              <div className="grid gap-4 lg:grid-cols-2">
+                <div className="vsm-card p-6">
+                  <h3 className="mb-4 font-display text-lg font-semibold">Top produits vendus</h3>
+                  {topSellingProducts.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Aucune vente enregistrée.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {topSellingProducts.map((product, index) => (
+                        <div key={product.productId} className="flex items-center justify-between rounded-sm border border-border px-3 py-2">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary">#{index + 1}</Badge>
+                            <span className="text-sm font-medium">{product.name}</span>
+                          </div>
+                          <span className="text-sm font-semibold text-primary">{product.qty} vendu(s)</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="vsm-card p-6">
+                  <h3 className="mb-4 font-display text-lg font-semibold">Variantes critiques</h3>
+                  {lowStockVariants.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Aucune variante critique.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {lowStockVariants.slice(0, 6).map((variant) => (
+                        <div
+                          key={variant.id}
+                          className="flex items-center justify-between rounded-sm border border-border px-3 py-2"
+                        >
+                          <span className="text-sm text-muted-foreground">
+                            Produit #{variant.product_id} • {variant.color} / {variant.size}
+                          </span>
+                          <Badge variant="destructive">{variant.stock} restant(s)</Badge>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
 
               {/* Recent orders */}
               <div className="vsm-card p-6">
@@ -730,6 +939,8 @@ const AdminDashboard = () => {
                       {allOrders.map((order) => {
                         const statusInfo = ORDER_STATUSES[order.status] || ORDER_STATUSES.pending;
                         const isExpanded = expandedOrder === order.id;
+                        const currentOrderItems = orderItemsByOrder[order.id] || [];
+
                         return (
                           <>
                             <tr key={order.id} className="border-b border-border last:border-0">
@@ -764,9 +975,9 @@ const AdminDashboard = () => {
                                 <td colSpan={7} className="bg-secondary/50 px-4 py-4">
                                   <div className="space-y-3">
                                     <h4 className="text-sm font-semibold">Articles de la commande</h4>
-                                    {orderItems && orderItems.length > 0 ? (
+                                    {currentOrderItems.length > 0 ? (
                                       <div className="space-y-2">
-                                        {orderItems.map((item: any) => (
+                                        {currentOrderItems.map((item: any) => (
                                           <div key={item.id} className="flex items-center justify-between rounded-sm border border-border bg-background px-3 py-2">
                                             <div>
                                               <span className="font-medium">{item.product_name}</span>
@@ -781,7 +992,7 @@ const AdminDashboard = () => {
                                         ))}
                                       </div>
                                     ) : (
-                                      <p className="text-sm text-muted-foreground">Chargement des articles...</p>
+                                      <p className="text-sm text-muted-foreground">Aucun article trouvé.</p>
                                     )}
                                     <div className="grid gap-2 text-sm sm:grid-cols-3">
                                       {(order as any).delivery_date && (
