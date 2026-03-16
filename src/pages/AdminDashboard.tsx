@@ -367,23 +367,37 @@ const AdminDashboard = () => {
   const { data: orders } = useQuery({
     queryKey: ["admin-orders"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("orders").select("*").order("created_at", { ascending: false });
+      const { data, error } = await supabase
+        .from("orders")
+        .select("*")
+        .order("created_at", { ascending: false });
       if (error) throw error;
       return data || [];
     },
     enabled: !!user && isAdmin,
+    refetchInterval: 15000,
   });
 
-  // Order items for expanded view
-  const { data: orderItems } = useQuery({
-    queryKey: ["admin-order-items", expandedOrder],
+  const { data: allOrderItems } = useQuery({
+    queryKey: ["admin-order-items"],
     queryFn: async () => {
-      if (!expandedOrder) return [];
-      const { data, error } = await supabase.from("order_items").select("*").eq("order_id", expandedOrder);
+      const { data, error } = await supabase.from("order_items").select("*");
       if (error) throw error;
       return data || [];
     },
-    enabled: !!expandedOrder,
+    enabled: !!user && isAdmin,
+    refetchInterval: 15000,
+  });
+
+  const { data: variants } = useQuery({
+    queryKey: ["admin-variants"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("product_variants").select("*");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!user && isAdmin,
+    refetchInterval: 15000,
   });
 
   const { data: promoCodes } = useQuery({
