@@ -731,6 +731,48 @@ const AdminDashboard = () => {
                 </div>
               )}
 
+              <div className="grid gap-4 lg:grid-cols-2">
+                <div className="vsm-card p-6">
+                  <h3 className="mb-4 font-display text-lg font-semibold">Top produits vendus</h3>
+                  {topSellingProducts.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Aucune vente enregistrée.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {topSellingProducts.map((product, index) => (
+                        <div key={product.productId} className="flex items-center justify-between rounded-sm border border-border px-3 py-2">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary">#{index + 1}</Badge>
+                            <span className="text-sm font-medium">{product.name}</span>
+                          </div>
+                          <span className="text-sm font-semibold text-primary">{product.qty} vendu(s)</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="vsm-card p-6">
+                  <h3 className="mb-4 font-display text-lg font-semibold">Variantes critiques</h3>
+                  {lowStockVariants.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Aucune variante critique.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {lowStockVariants.slice(0, 6).map((variant) => (
+                        <div
+                          key={variant.id}
+                          className="flex items-center justify-between rounded-sm border border-border px-3 py-2"
+                        >
+                          <span className="text-sm text-muted-foreground">
+                            Produit #{variant.product_id} • {variant.color} / {variant.size}
+                          </span>
+                          <Badge variant="destructive">{variant.stock} restant(s)</Badge>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Recent orders */}
               <div className="vsm-card p-6">
                 <div className="mb-4 flex items-center justify-between">
