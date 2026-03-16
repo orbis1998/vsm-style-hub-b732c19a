@@ -876,6 +876,8 @@ const AdminDashboard = () => {
                       {allOrders.map((order) => {
                         const statusInfo = ORDER_STATUSES[order.status] || ORDER_STATUSES.pending;
                         const isExpanded = expandedOrder === order.id;
+                        const currentOrderItems = orderItemsByOrder[order.id] || [];
+
                         return (
                           <>
                             <tr key={order.id} className="border-b border-border last:border-0">
@@ -910,9 +912,9 @@ const AdminDashboard = () => {
                                 <td colSpan={7} className="bg-secondary/50 px-4 py-4">
                                   <div className="space-y-3">
                                     <h4 className="text-sm font-semibold">Articles de la commande</h4>
-                                    {orderItems && orderItems.length > 0 ? (
+                                    {currentOrderItems.length > 0 ? (
                                       <div className="space-y-2">
-                                        {orderItems.map((item: any) => (
+                                        {currentOrderItems.map((item: any) => (
                                           <div key={item.id} className="flex items-center justify-between rounded-sm border border-border bg-background px-3 py-2">
                                             <div>
                                               <span className="font-medium">{item.product_name}</span>
@@ -927,8 +929,8 @@ const AdminDashboard = () => {
                                         ))}
                                       </div>
                                     ) : (
-                                      <p className="text-sm text-muted-foreground">Chargement des articles...</p>
-                                    )}
+                                      <p className="text-sm text-muted-foreground">Aucun article trouvé.</p>
+                                    )
                                     <div className="grid gap-2 text-sm sm:grid-cols-3">
                                       {(order as any).delivery_date && (
                                         <div className="flex items-center gap-1 text-muted-foreground"><Calendar className="h-3 w-3" />Livraison: {(order as any).delivery_date}</div>
