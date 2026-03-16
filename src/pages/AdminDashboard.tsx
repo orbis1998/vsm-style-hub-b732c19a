@@ -78,14 +78,22 @@ const ProductForm = ({ product, onClose }: { product?: Tables<"products"> | null
   const [newStock, setNewStock] = useState("0");
   const [variantsLoaded, setVariantsLoaded] = useState(!product);
 
-  useState(() => {
-    if (product) {
-      supabase.from("product_variants").select("*").eq("product_id", product.id).then(({ data }) => {
-        if (data) setVariants(data.map((v: any) => ({ color: v.color, size: v.size, stock: v.stock })));
+  useEffect(() => {
+    if (!product) return;
+
+    supabase
+      .from("product_variants")
+      .select("*")
+      .eq("product_id", product.id)
+      .then(({ data }) => {
+        if (data) {
+          setVariants(
+            data.map((v: any) => ({ color: v.color, size: v.size, stock: v.stock }))
+          );
+        }
         setVariantsLoaded(true);
       });
-    }
-  });
+  }, [product]);
 
   const addVariant = () => {
     if (!newColor || !newSize) return;
