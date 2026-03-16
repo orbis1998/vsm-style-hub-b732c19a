@@ -431,11 +431,15 @@ const AdminDashboard = () => {
   const { data: ambassadorApps } = useQuery({
     queryKey: ["admin-ambassadors"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("ambassador_applications").select("*").order("created_at", { ascending: false });
+      const { data, error } = await supabase
+        .from("ambassador_applications")
+        .select("*")
+        .order("created_at", { ascending: false });
       if (error) throw error;
       return data || [];
     },
     enabled: !!user && isAdmin,
+    refetchInterval: 20000,
   });
 
   const { data: clients } = useQuery({
