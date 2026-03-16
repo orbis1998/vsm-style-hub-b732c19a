@@ -445,11 +445,15 @@ const AdminDashboard = () => {
   const { data: clients } = useQuery({
     queryKey: ["admin-clients"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("profiles").select("*").order("created_at", { ascending: false });
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .order("created_at", { ascending: false });
       if (error) throw error;
       return data || [];
     },
     enabled: !!user && isAdmin,
+    refetchInterval: 30000,
   });
 
   // Computed stats
