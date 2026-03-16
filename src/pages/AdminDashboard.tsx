@@ -255,15 +255,29 @@ const HeroManager = () => {
     },
   });
   const [slides, setSlides] = useState<{ image: string; title: string; subtitle: string }[]>([]);
-  const [initialized, setInitialized] = useState(false);
-  if (heroSettings && !initialized) {
+
+  useEffect(() => {
+    if (!heroSettings) return;
+
     setSlides([
-      { image: heroSettings.hero_1_image || "", title: heroSettings.hero_1_title || "", subtitle: heroSettings.hero_1_subtitle || "" },
-      { image: heroSettings.hero_2_image || "", title: heroSettings.hero_2_title || "", subtitle: heroSettings.hero_2_subtitle || "" },
-      { image: heroSettings.hero_3_image || "", title: heroSettings.hero_3_title || "", subtitle: heroSettings.hero_3_subtitle || "" },
+      {
+        image: heroSettings.hero_1_image || "",
+        title: heroSettings.hero_1_title || "",
+        subtitle: heroSettings.hero_1_subtitle || "",
+      },
+      {
+        image: heroSettings.hero_2_image || "",
+        title: heroSettings.hero_2_title || "",
+        subtitle: heroSettings.hero_2_subtitle || "",
+      },
+      {
+        image: heroSettings.hero_3_image || "",
+        title: heroSettings.hero_3_title || "",
+        subtitle: heroSettings.hero_3_subtitle || "",
+      },
     ]);
-    setInitialized(true);
-  }
+  }, [heroSettings]);
+
   const [saving, setSaving] = useState(false);
   const handleSave = async () => {
     setSaving(true);
@@ -272,15 +286,22 @@ const HeroManager = () => {
       { key: `hero_${i + 1}_title`, value: slide.title },
       { key: `hero_${i + 1}_subtitle`, value: slide.subtitle },
     ]);
+
     for (const item of updates) {
-      await supabase.from("settings").upsert({ key: item.key, value: item.value }, { onConflict: "key" });
+      await supabase
+        .from("settings")
+        .upsert({ key: item.key, value: item.value }, { onConflict: "key" });
     }
+
     toast({ title: "Slides héros mises à jour" });
     queryClient.invalidateQueries({ queryKey: ["hero-settings"] });
     setSaving(false);
   };
+
   const updateSlide = (index: number, field: string, value: string) => {
-    setSlides(prev => prev.map((s, i) => i === index ? { ...s, [field]: value } : s));
+    setSlides((prev) =>
+      prev.map((s, i) => (i === index ? { ...s, [field]: value } : s))
+    );
   };
   if (isLoading) return <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   return (
