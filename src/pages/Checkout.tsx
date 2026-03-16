@@ -127,7 +127,7 @@ const Checkout = () => {
         unit_price: item.price,
       }));
 
-      const { data: orderId, error: orderError } = await supabase.rpc(
+      const { data: orderId, error: orderError } = await (supabase as any).rpc(
         "create_order_with_items",
         {
           _customer_id: user?.id || null,
