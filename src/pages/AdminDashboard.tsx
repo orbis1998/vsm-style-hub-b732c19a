@@ -417,11 +417,15 @@ const AdminDashboard = () => {
   const { data: deliveryZones } = useQuery({
     queryKey: ["admin-delivery"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("delivery_zones").select("*").order("name");
+      const { data, error } = await supabase
+        .from("delivery_zones")
+        .select("*")
+        .order("name");
       if (error) throw error;
       return data || [];
     },
     enabled: !!user && isAdmin,
+    refetchInterval: 30000,
   });
 
   const { data: ambassadorApps } = useQuery({
