@@ -456,34 +456,142 @@ const AdminDashboard = () => {
     refetchInterval: 30000,
   });
 
-  // Computed stats
+  // Computed stats (100% basés DB)
   const allOrders = orders || [];
-  const deliveredOrders = allOrders.filter(o => o.status === "delivered");
-  const pendingOrders = allOrders.filter(o => o.status === "pending");
-  const totalRevenue = deliveredOrders.reduce((sum, o) => sum + Number(o.total_amount), 0);
+  const allItems = allOrderItems || [];
+  const allVariants = variants || [];
+
+  const orderItemsByOrder = useMemo(() => {
+    return allItems.reduce<Record<number, any[]>>((acc, item) => {
+      if (!acc[item.order_id]) acc[item.order_id] = [];
+      acc[item.order_id].push(item);
+      return acc;
+    }, {});
+  }, [allItems]);
+
+  const pendingOrders = allOrders.filter((o) => o.status === "pending");
   const totalSales = allOrders.reduce((sum, o) => sum + Number(o.total_amount), 0);
   const totalOrders = allOrders.length;
   const totalProducts = (products || []).length;
   const totalClients = (clients || []).length;
-  const pendingApps = (ambassadorApps || []).filter(a => a.status === "pending").length;
+  const pendingApps = (ambassadorApps || []).filter((a) => a.status === "pending").length;
+  const soldUnits = allItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+  const inventoryUnits = allVariants.reduce((sum, variant) => sum + Number(variant.stock || 0), 0);
 
-  // Low stock products
-  const lowStockProducts = (products || []).filter(p => (p.stock ?? 0) <= 5 && p.is_active);
+  // Low stock
+  const lowStockProducts = (products || []).filter(
+    (p) => (p.stock ?? 0) <= 5 && p.is_active
+  );
+  const lowStockVariants = allVariants.filter((variant) => Number(variant.stock) <= 3);
 
   // Revenue this month
   const now = new Date();
-  const thisMonth = allOrders.filter(o => {
+  const thisMonth = allOrders.filter((o) => {
     if (!o.created_at) return false;
     const d = new Date(o.created_at);
     return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
   });
   const monthRevenue = thisMonth.reduce((s, o) => s + Number(o.total_amount), 0);
 
+  const topSellingProducts = useMemo(() => {
+    const namesById = new Map<number, string>();
+    (products || []).forEach((product) => {
+      namesById.set(product.id, product.name);
+    });
+
+    const soldByProduct = new Map<number, number>();
+    allItems.forEach((item) => {
+      const productId = Number(item.product_id);
+      if (!productId) return;
+      soldByProduct.set(
+        productId,
+        (soldByProduct.get(productId) || 0) + Number(item.quantity || 0)
+      );
+    });
+
+    return Array.from(soldByProduct.entries())
+      .map(([productId, qty]) => ({
+        productId,
+        qty,
+        name: namesById.get(productId) || `Produit #${productId}`,
+      }))
+      .sort((a, b) => b.qty - a.qty)
+      .slice(0, 5);
+  }, [allItems, products]);
+
+  // Realtime + polling fallback
+  useEffect(() => {
+    if (!user || !isAdmin) return;
+
+    const invalidateAll = () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-order-items"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-variants"] });
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["products", "all"] });
+    };
+
+    const channel = supabase
+      .channel("admin-dashboard-live")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "orders" },
+        invalidateAll
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "order_items" },
+        invalidateAll
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "products" },
+        invalidateAll
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "product_variants" },
+        invalidateAll
+      )
+      .subscribe();
+
+    const poller = window.setInterval(invalidateAll, 20000);
+
+    return () => {
+      window.clearInterval(poller);
+      supabase.removeChannel(channel);
+    };
+  }, [user, isAdmin, queryClient]);
+
   const stats = [
-    { label: "Commandes", value: totalOrders, sub: `${pendingOrders.length} en attente`, icon: ShoppingCart, color: "text-blue-500" },
-    { label: "Revenus totaux", value: formatPrice(totalSales), sub: `${formatPrice(monthRevenue)} ce mois`, icon: DollarSign, color: "text-green-500" },
-    { label: "Produits", value: totalProducts, sub: `${lowStockProducts.length} stock faible`, icon: Package, color: "text-primary" },
-    { label: "Clients", value: totalClients, sub: `${pendingApps} ambassadeurs en attente`, icon: Users, color: "text-yellow-500" },
+    {
+      label: "Revenus",
+      value: formatPrice(totalSales),
+      sub: `${formatPrice(monthRevenue)} ce mois`,
+      icon: DollarSign,
+      color: "text-primary",
+    },
+    {
+      label: "Commandes",
+      value: totalOrders,
+      sub: `${pendingOrders.length} en attente`,
+      icon: ShoppingCart,
+      color: "text-primary",
+    },
+    {
+      label: "Articles vendus",
+      value: soldUnits,
+      sub: `${inventoryUnits} restants`,
+      icon: Package,
+      color: "text-primary",
+    },
+    {
+      label: "Clients",
+      value: totalClients,
+      sub: `${pendingApps} demandes ambassadeur`,
+      icon: Users,
+      color: "text-primary",
+    },
   ];
 
   // Handlers
