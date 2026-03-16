@@ -930,7 +930,7 @@ const AdminDashboard = () => {
                                       </div>
                                     ) : (
                                       <p className="text-sm text-muted-foreground">Aucun article trouvé.</p>
-                                    )
+                                    )}
                                     <div className="grid gap-2 text-sm sm:grid-cols-3">
                                       {(order as any).delivery_date && (
                                         <div className="flex items-center gap-1 text-muted-foreground"><Calendar className="h-3 w-3" />Livraison: {(order as any).delivery_date}</div>
