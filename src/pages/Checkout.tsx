@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import Navbar from "@/components/Navbar";
@@ -30,6 +30,7 @@ const Checkout = () => {
   const { user } = useAuth();
   const { items, getTotal, promoCode, promoDiscount, clearCart } = useCart();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
   const [formData, setFormData] = useState({
     fullName: "",
@@ -80,6 +81,12 @@ const Checkout = () => {
     tomorrow.setDate(tomorrow.getDate() + 1);
     return tomorrow.toISOString().split("T")[0];
   };
+
+  useEffect(() => {
+    if (items.length === 0 && !isSubmitting && !isRedirecting) {
+      navigate("/panier");
+    }
+  }, [items.length, isSubmitting, isRedirecting, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -189,16 +196,17 @@ const Checkout = () => {
       );
 
       const whatsappNumber = "243976028479";
-      const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${message}`;
+      const whatsappUrl = `https://api.whatsapp.com/send?phone=${whatsappNumber}&text=${message}`;
 
+      setIsRedirecting(true);
       clearCart();
       toast({
         title: "Commande enregistrée!",
         description: `Commande #${savedOrderId} créée avec succès.`,
       });
 
-      // Redirection robuste (évite le blocage popup sur mobile)
       window.location.assign(whatsappUrl);
+      return;
     } catch (err: any) {
       console.error("Order error:", err);
       toast({
@@ -210,11 +218,6 @@ const Checkout = () => {
       setIsSubmitting(false);
     }
   };
-
-  if (items.length === 0) {
-    navigate("/panier");
-    return null;
-  }
 
   return (
     <main className="min-h-screen bg-background">
