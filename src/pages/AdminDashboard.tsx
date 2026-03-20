@@ -49,11 +49,10 @@ const COLORS = [
 ];
 
 const ORDER_STATUSES: Record<string, { label: string; color: string }> = {
-  pending: { label: "En attente", color: "bg-yellow-500/20 text-yellow-600" },
-  confirmed: { label: "Confirmée", color: "bg-blue-500/20 text-blue-600" },
-  shipped: { label: "Expédiée", color: "bg-purple-500/20 text-purple-600" },
-  delivered: { label: "Livrée", color: "bg-green-500/20 text-green-600" },
-  cancelled: { label: "Annulée", color: "bg-red-500/20 text-red-600" },
+  nouvelle: { label: "Nouvelle", color: "bg-yellow-500/20 text-yellow-600" },
+  traitée: { label: "Traitée", color: "bg-blue-500/20 text-blue-600" },
+  expédiée: { label: "Expédiée", color: "bg-purple-500/20 text-purple-600" },
+  annulée: { label: "Annulée", color: "bg-red-500/20 text-red-600" },
 };
 
 // =================== Product Form with Variants ===================
@@ -805,7 +804,7 @@ const AdminDashboard = () => {
                 ) : (
                   <div className="space-y-3">
                     {allOrders.slice(0, 5).map((order) => {
-                      const statusInfo = ORDER_STATUSES[order.status] || ORDER_STATUSES.pending;
+                      const statusInfo = ORDER_STATUSES[order.status] || ORDER_STATUSES.nouvelle;
                       return (
                         <div key={order.id} className="flex items-center justify-between rounded-sm border border-border p-3">
                           <div>
@@ -937,7 +936,7 @@ const AdminDashboard = () => {
                     </thead>
                     <tbody>
                       {allOrders.map((order) => {
-                        const statusInfo = ORDER_STATUSES[order.status] || ORDER_STATUSES.pending;
+                        const statusInfo = ORDER_STATUSES[order.status] || ORDER_STATUSES.nouvelle;
                         const isExpanded = expandedOrder === order.id;
                         const currentOrderItems = orderItemsByOrder[order.id] || [];
 
