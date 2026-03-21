@@ -476,10 +476,15 @@ const AdminDashboard = () => {
     refetchInterval: 30000,
   });
 
-  // Computed stats (100% basés DB)
+  // Computed stats (100% basés DB) — seules les commandes confirmées comptent pour le CA
   const allOrders = orders || [];
   const allItems = allOrderItems || [];
   const allVariants = variants || [];
+
+  const confirmedStatuses = ["traitée", "expédiée"];
+  const confirmedOrders = allOrders.filter((o) => confirmedStatuses.includes(o.status));
+  const confirmedOrderIds = new Set(confirmedOrders.map((o) => o.id));
+  const confirmedItems = allItems.filter((item) => confirmedOrderIds.has(item.order_id));
 
   const orderItemsByOrder = useMemo(() => {
     return allItems.reduce<Record<number, any[]>>((acc, item) => {
@@ -489,13 +494,13 @@ const AdminDashboard = () => {
     }, {});
   }, [allItems]);
 
-  const pendingOrders = allOrders.filter((o) => o.status === "pending");
-  const totalSales = allOrders.reduce((sum, o) => sum + Number(o.total_amount), 0);
+  const pendingOrders = allOrders.filter((o) => o.status === "nouvelle");
+  const totalSales = confirmedOrders.reduce((sum, o) => sum + Number(o.total_amount), 0);
   const totalOrders = allOrders.length;
   const totalProducts = (products || []).length;
   const totalClients = (clients || []).length;
   const pendingApps = (ambassadorApps || []).filter((a) => a.status === "pending").length;
-  const soldUnits = allItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+  const soldUnits = confirmedItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
   const inventoryUnits = allVariants.reduce((sum, variant) => sum + Number(variant.stock || 0), 0);
 
   // Low stock
@@ -504,9 +509,9 @@ const AdminDashboard = () => {
   );
   const lowStockVariants = allVariants.filter((variant) => Number(variant.stock) <= 3);
 
-  // Revenue this month
+  // Revenue this month (confirmed only)
   const now = new Date();
-  const thisMonth = allOrders.filter((o) => {
+  const thisMonth = confirmedOrders.filter((o) => {
     if (!o.created_at) return false;
     const d = new Date(o.created_at);
     return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
@@ -520,7 +525,7 @@ const AdminDashboard = () => {
     });
 
     const soldByProduct = new Map<number, number>();
-    allItems.forEach((item) => {
+    confirmedItems.forEach((item) => {
       const productId = Number(item.product_id);
       if (!productId) return;
       soldByProduct.set(
@@ -537,7 +542,7 @@ const AdminDashboard = () => {
       }))
       .sort((a, b) => b.qty - a.qty)
       .slice(0, 5);
-  }, [allItems, products]);
+  }, [confirmedItems, products]);
 
   // Realtime + polling fallback
   useEffect(() => {

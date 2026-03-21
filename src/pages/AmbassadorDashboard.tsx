@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -33,11 +33,26 @@ interface PromoCode {
   usage_count: number;
 }
 
+interface ClickRow {
+  id: number;
+  link_id: number;
+}
+
+interface OrderRow {
+  id: number;
+  total_amount: number;
+  status: string;
+  ambassador_id: string | null;
+  promo_code_id: number | null;
+}
+
 const AmbassadorDashboard = () => {
   const { user, signOut, isAmbassador, loading } = useAuth();
   const navigate = useNavigate();
   const [trackingLinks, setTrackingLinks] = useState<TrackingLink[]>([]);
   const [promoCodes, setPromoCodes] = useState<PromoCode[]>([]);
+  const [clicks, setClicks] = useState<ClickRow[]>([]);
+  const [orders, setOrders] = useState<OrderRow[]>([]);
   const [newLinkCode, setNewLinkCode] = useState("");
   const [isCreating, setIsCreating] = useState(false);
 
@@ -63,7 +78,7 @@ const AmbassadorDashboard = () => {
   const fetchData = async () => {
     if (!user) return;
 
-    const [linksResult, codesResult] = await Promise.all([
+    const [linksResult, codesResult, ordersResult] = await Promise.all([
       supabase
         .from("ambassador_links")
         .select("*")
@@ -73,11 +88,47 @@ const AmbassadorDashboard = () => {
         .from("promo_codes")
         .select("*")
         .eq("ambassador_id", user.id),
+      supabase
+        .from("orders")
+        .select("id, total_amount, status, ambassador_id, promo_code_id")
+        .eq("ambassador_id", user.id),
     ]);
 
-    if (linksResult.data) setTrackingLinks(linksResult.data as unknown as TrackingLink[]);
+    const links = (linksResult.data || []) as unknown as TrackingLink[];
+    setTrackingLinks(links);
     if (codesResult.data) setPromoCodes(codesResult.data as unknown as PromoCode[]);
+    if (ordersResult.data) setOrders(ordersResult.data as unknown as OrderRow[]);
+
+    // Fetch clicks for all ambassador links
+    if (links.length > 0) {
+      const linkIds = links.map((l) => l.id);
+      const { data: clicksData } = await supabase
+        .from("ambassador_clicks")
+        .select("id, link_id")
+        .in("link_id", linkIds);
+      setClicks((clicksData || []) as unknown as ClickRow[]);
+    } else {
+      setClicks([]);
+    }
   };
+
+  // Computed stats from real DB data
+  const clicksByLink = useMemo(() => {
+    const map: Record<number, number> = {};
+    clicks.forEach((c) => {
+      map[c.link_id] = (map[c.link_id] || 0) + 1;
+    });
+    return map;
+  }, [clicks]);
+
+  const confirmedStatuses = ["traitée", "expédiée"];
+  const confirmedOrders = orders.filter((o) => confirmedStatuses.includes(o.status));
+
+  const totalClicks = clicks.length;
+  const totalConversions = confirmedOrders.length;
+  const totalRevenue = confirmedOrders.reduce((s, o) => s + Number(o.total_amount), 0);
+  const conversionRate = totalClicks > 0 ? ((totalConversions / totalClicks) * 100).toFixed(1) : "0";
+  const totalPromoUsage = promoCodes.reduce((s, c) => s + c.usage_count, 0);
 
   const createTrackingLink = async () => {
     if (!newLinkCode.trim() || !user) return;
@@ -120,11 +171,6 @@ const AmbassadorDashboard = () => {
   const formatPrice = (price: number) => {
     return price.toLocaleString("fr-CD") + " FC";
   };
-
-  const totalClicks = 0; // clicks tracked via ambassador_clicks table
-  const totalConversions = 0;
-  const totalRevenue = 0;
-  const conversionRate = "0";
 
   if (loading) {
     return (
@@ -191,7 +237,7 @@ const AmbassadorDashboard = () => {
             <div className="vsm-card p-6 text-center">
               <ShoppingCart className="mx-auto h-8 w-8 text-green-500" />
               <p className="mt-4 font-display text-3xl font-bold">{totalConversions}</p>
-              <p className="mt-1 text-sm text-muted-foreground">Commandes</p>
+              <p className="mt-1 text-sm text-muted-foreground">Commandes confirmées</p>
             </div>
             <div className="vsm-card p-6 text-center">
               <TrendingUp className="mx-auto h-8 w-8 text-primary" />
@@ -223,7 +269,7 @@ const AmbassadorDashboard = () => {
                         {code.discount_type === "percent"
                           ? `-${code.discount_value}%`
                           : `-${formatPrice(code.discount_value)}`}
-                        {" • "}{code.usage_count} utilisations
+                        {" • "}{code.usage_count} utilisation{code.usage_count !== 1 ? "s" : ""}
                       </p>
                     </div>
                     <Button
@@ -235,6 +281,9 @@ const AmbassadorDashboard = () => {
                     </Button>
                   </div>
                 ))}
+              </div>
+              <div className="mt-3 rounded-sm bg-primary/10 p-3 text-sm text-muted-foreground">
+                📊 <span className="font-semibold text-foreground">{totalPromoUsage}</span> personne{totalPromoUsage !== 1 ? "s ont" : " a"} utilisé vos codes promo au total.
               </div>
             </motion.div>
           )}
@@ -277,25 +326,20 @@ const AmbassadorDashboard = () => {
                     <tr>
                       <th className="px-4 py-3 text-left text-sm font-semibold">Lien</th>
                       <th className="px-4 py-3 text-center text-sm font-semibold">Clics</th>
-                      <th className="px-4 py-3 text-center text-sm font-semibold">Conversions</th>
-                      <th className="px-4 py-3 text-right text-sm font-semibold">Revenus</th>
                       <th className="px-4 py-3 text-right text-sm font-semibold">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {trackingLinks.map((link) => {
-                      const fullLink = `https://vsmcollection.com/?ref=${link.slug}`;
+                      const fullLink = `${window.location.origin}/?ref=${link.slug}`;
+                      const linkClicks = clicksByLink[link.id] || 0;
                       return (
                         <tr key={link.id} className="border-b border-border last:border-0">
                           <td className="px-4 py-4">
                             <p className="font-medium text-primary">{link.slug}</p>
                             <p className="text-xs text-muted-foreground">{fullLink}</p>
                           </td>
-                          <td className="px-4 py-4 text-center">—</td>
-                          <td className="px-4 py-4 text-center">—</td>
-                          <td className="px-4 py-4 text-right font-semibold text-green-500">
-                            —
-                          </td>
+                          <td className="px-4 py-4 text-center font-semibold">{linkClicks}</td>
                           <td className="px-4 py-4 text-right">
                             <Button
                               variant="outline"
