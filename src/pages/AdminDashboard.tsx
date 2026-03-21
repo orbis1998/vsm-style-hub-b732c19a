@@ -486,6 +486,13 @@ const AdminDashboard = () => {
   const confirmedOrderIds = new Set(confirmedOrders.map((o) => o.id));
   const confirmedItems = allItems.filter((item) => confirmedOrderIds.has(item.order_id));
 
+  const orderItemsByOrder = useMemo(() => {
+    return allItems.reduce<Record<number, any[]>>((acc, item) => {
+      if (!acc[item.order_id]) acc[item.order_id] = [];
+      acc[item.order_id].push(item);
+      return acc;
+    }, {});
+  }, [allItems]);
 
   const pendingOrders = allOrders.filter((o) => o.status === "nouvelle");
   const totalSales = confirmedOrders.reduce((sum, o) => sum + Number(o.total_amount), 0);
