@@ -17,6 +17,7 @@ export type Database = {
       ambassador_applications: {
         Row: {
           created_at: string | null
+          email: string | null
           full_name: string
           id: number
           main_platform: string
@@ -28,6 +29,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          email?: string | null
           full_name: string
           id?: number
           main_platform: string
@@ -39,6 +41,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          email?: string | null
           full_name?: string
           id?: number
           main_platform?: string
