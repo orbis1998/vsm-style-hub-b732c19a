@@ -518,7 +518,7 @@ const AdminDashboard = () => {
     });
 
     const soldByProduct = new Map<number, number>();
-    allItems.forEach((item) => {
+    confirmedItems.forEach((item) => {
       const productId = Number(item.product_id);
       if (!productId) return;
       soldByProduct.set(
@@ -535,7 +535,7 @@ const AdminDashboard = () => {
       }))
       .sort((a, b) => b.qty - a.qty)
       .slice(0, 5);
-  }, [allItems, products]);
+  }, [confirmedItems, products]);
 
   // Realtime + polling fallback
   useEffect(() => {
