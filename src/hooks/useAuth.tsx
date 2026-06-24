@@ -12,8 +12,12 @@ interface AuthContextType {
   roles: AppRole[];
   isAdmin: boolean;
   isAmbassador: boolean;
+  /** Recharge les rôles depuis la base (utile après connexion). */
+  refreshRoles: () => Promise<AppRole[]>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
+  /** Envoie l’email de réinitialisation (lien vers /reinitialiser-mot-de-passe). */
+  resetPasswordForEmail: (email: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
 }
 
@@ -31,10 +35,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       (_event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
-        
+
         if (session?.user) {
+          setRolesLoading(true);
+          setRoles([]);
           setTimeout(() => {
-            fetchUserRoles(session.user.id);
+            void fetchUserRoles(session.user.id);
           }, 0);
         } else {
           setRoles([]);
@@ -58,7 +64,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUser(session?.user ?? null);
 
       if (session?.user) {
-        fetchUserRoles(session.user.id);
+        setRolesLoading(true);
+        setRoles([]);
+        await fetchUserRoles(session.user.id);
       } else {
         setRolesLoading(false);
       }
@@ -68,7 +76,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => subscription.unsubscribe();
   }, []);
 
-  const fetchUserRoles = async (userId: string) => {
+  const fetchUserRoles = async (userId: string): Promise<AppRole[]> => {
     setRolesLoading(true);
     try {
       const { data, error } = await supabase
@@ -77,13 +85,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         .eq("user_id", userId);
       
       if (error) throw error;
-      setRoles(data?.map(r => r.role as AppRole) || []);
+      const next = data?.map(r => r.role as AppRole) || [];
+      setRoles(next);
+      return next;
     } catch (error) {
       console.error("Error fetching roles:", error);
       setRoles([]);
+      return [];
     } finally {
       setRolesLoading(false);
     }
+  };
+
+  const refreshRoles = async () => {
+    const { data: { session: s } } = await supabase.auth.getSession();
+    if (!s?.user) {
+      setRoles([]);
+      setRolesLoading(false);
+      return [];
+    }
+    return fetchUserRoles(s.user.id);
   };
 
   const signUp = async (email: string, password: string, fullName: string) => {
@@ -104,6 +125,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return { error };
   };
 
+  const resetPasswordForEmail = async (email: string) => {
+    const redirectTo = `${window.location.origin}/reinitialiser-mot-de-passe`;
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+    return { error };
+  };
+
   const signOut = async () => {
     await supabase.auth.signOut();
     setRoles([]);
@@ -115,7 +142,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   return (
     <AuthContext.Provider value={{
       user, session, loading, rolesLoading, roles, isAdmin, isAmbassador,
-      signUp, signIn, signOut,
+      refreshRoles, signUp, signIn, resetPasswordForEmail, signOut,
     }}>
       {children}
     </AuthContext.Provider>

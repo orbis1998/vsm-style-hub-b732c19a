@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   Package, Users, DollarSign, ShoppingCart, Plus, Edit, Trash2,
   LogOut, Menu, X, Tag, Truck, UserCheck, BarChart3, Save, Loader2, Check, XCircle, Image, Settings,
   AlertTriangle, Eye, TrendingUp, Calendar, Phone, MapPin, ChevronDown, ChevronUp,
+  Link2, MousePointerClick, Copy, Wallet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,17 +19,40 @@ import { useAllProducts, useCreateProduct, useUpdateProduct, useDeleteProduct } 
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Tables } from "@/integrations/supabase/types";
 import ImageUploader from "@/components/admin/ImageUploader";
+import { VsmBrandMark } from "@/components/VsmBrandMark";
 import MultiImageUploader from "@/components/admin/MultiImageUploader";
+import { slugify } from "@/lib/slug";
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  Tooltip as RechartsTooltip,
+  PieChart,
+  Pie,
+  Cell,
+  BarChart,
+  Bar,
+} from "recharts";
 
 const menuItems = [
-  { icon: BarChart3, label: "Dashboard", id: "dashboard" },
+  { icon: TrendingUp, label: "Dashboard", id: "dashboard" },
   { icon: Package, label: "Produits", id: "products" },
   { icon: ShoppingCart, label: "Commandes", id: "orders" },
   { icon: Truck, label: "Livraison", id: "delivery" },
   { icon: Tag, label: "Promos", id: "promos" },
   { icon: UserCheck, label: "Ambassadeurs", id: "ambassadors" },
+  { icon: Wallet, label: "Retraits amb.", id: "withdrawals" },
   { icon: Users, label: "Clients", id: "clients" },
   { icon: Image, label: "Héros", id: "hero" },
 ];
@@ -55,6 +79,13 @@ const ORDER_STATUSES: Record<string, { label: string; color: string }> = {
   annulée: { label: "Annulée", color: "bg-red-500/20 text-red-600" },
 };
 
+const PRO_STATUS_COLORS: Record<string, string> = {
+  nouvelle: "#EAB308",
+  traitée: "#3B82F6",
+  expédiée: "#A855F7",
+  annulée: "#EF4444",
+};
+
 // =================== Product Form with Variants ===================
 interface VariantRow { color: string; size: string; stock: number; }
 
@@ -68,8 +99,9 @@ const ProductForm = ({ product, onClose }: { product?: Tables<"products"> | null
     name: product?.name || "", description: product?.description || "",
     price: product?.price ? String(product.price) : "", category: product?.category || "",
     image_url: product?.image_url || "", images: existingImages as string[],
-    sku: product?.sku || "", is_active: product?.is_active ?? true,
+    sku: product?.sku || "", slug: product?.slug || "", is_active: product?.is_active ?? true,
   });
+  const [slugTouched, setSlugTouched] = useState(!!product?.slug);
 
   const [variants, setVariants] = useState<VariantRow[]>([]);
   const [newColor, setNewColor] = useState("");
@@ -114,7 +146,7 @@ const ProductForm = ({ product, onClose }: { product?: Tables<"products"> | null
     const payload = {
       name: form.name, description: form.description || null, price: form.price ? Number(form.price) : null,
       category: form.category || null, image_url: mainImage, images: form.images.length > 0 ? form.images : null,
-      stock: totalStock, sku: form.sku || null, is_active: form.is_active,
+      stock: totalStock, sku: form.sku || null, slug: form.slug || slugify(form.name), is_active: form.is_active,
     };
     try {
       let productId: number;
@@ -149,12 +181,41 @@ const ProductForm = ({ product, onClose }: { product?: Tables<"products"> | null
         <label className="text-sm font-medium">Images du produit</label>
         <MultiImageUploader values={form.images} onChange={(urls) => setForm({ ...form, images: urls, image_url: urls[0] || "" })} folder="products" />
       </div>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2"><label className="text-sm font-medium">Nom *</label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></div>
-        <div className="space-y-2"><label className="text-sm font-medium">SKU</label><Input value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} /></div>
-        <div className="space-y-2"><label className="text-sm font-medium">Prix (FC)</label><Input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} /></div>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="space-y-2 sm:col-span-2 lg:col-span-1">
+          <label className="font-display text-xs font-semibold uppercase tracking-wider">Nom *</label>
+          <Input
+            value={form.name}
+            onChange={(e) => {
+              const name = e.target.value;
+              setForm((prev) => ({
+                ...prev,
+                name,
+                slug: slugTouched ? prev.slug : slugify(name),
+              }));
+            }}
+            required
+          />
+        </div>
+        <div className="space-y-2 sm:col-span-2">
+          <label className="font-display text-xs font-semibold uppercase tracking-wider">URL du produit</label>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <span className="shrink-0 text-sm text-muted-foreground">/produit/</span>
+            <Input
+              value={form.slug}
+              onChange={(e) => {
+                setSlugTouched(true);
+                setForm({ ...form, slug: slugify(e.target.value) });
+              }}
+              placeholder="mon-hoodie-vsm"
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">Généré depuis le nom. Modifiable pour une URL lisible.</p>
+        </div>
+        <div className="space-y-2"><label className="font-display text-xs font-semibold uppercase tracking-wider">SKU</label><Input value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} /></div>
+        <div className="space-y-2"><label className="font-display text-xs font-semibold uppercase tracking-wider">Prix (FC)</label><Input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} /></div>
         <div className="space-y-2">
-          <label className="text-sm font-medium">Catégorie</label>
+          <label className="font-display text-xs font-semibold uppercase tracking-wider">Catégorie</label>
           <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
             <SelectTrigger><SelectValue placeholder="Choisir" /></SelectTrigger>
             <SelectContent>{["hoodies", "t-shirts", "pantalons", "vestes", "ensembles", "accessoires"].map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
@@ -328,21 +389,71 @@ const HeroManager = () => {
 };
 
 // =================== Promo Form ===================
-const PromoForm = ({ onClose }: { onClose: () => void }) => {
+const PromoForm = ({
+  onClose,
+  ambassadors,
+  defaultAmbassadorId,
+}: {
+  onClose: () => void;
+  ambassadors: Array<{ user_id: string; full_name: string; username: string }>;
+  defaultAmbassadorId?: string;
+}) => {
   const queryClient = useQueryClient();
-  const [form, setForm] = useState({ code: "", discount_value: "", discount_type: "percent", description: "", max_usage: "", is_global: true, ambassador_id: "" });
+  const [form, setForm] = useState({
+    code: "",
+    discount_value: "",
+    discount_type: "percent",
+    description: "",
+    max_usage: "",
+    is_global: !defaultAmbassadorId,
+    ambassador_id: defaultAmbassadorId || "",
+    create_tracking_link: false,
+    tracking_slug: "",
+  });
   const [saving, setSaving] = useState(false);
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.code || !form.discount_value) return;
+    const ambassadorId = form.ambassador_id?.trim() || null;
+    if (!form.is_global && !ambassadorId) {
+      toast({ title: "Ambassadeur requis", description: "Choisissez un ambassadeur ou cochez « Code global ».", variant: "destructive" });
+      return;
+    }
     setSaving(true);
-    const { error } = await supabase.from("promo_codes").insert({
-      code: form.code.toUpperCase(), discount_value: Number(form.discount_value), discount_type: form.discount_type,
-      description: form.description || null, max_usage: form.max_usage ? Number(form.max_usage) : null,
-      is_global: form.is_global, ambassador_id: form.ambassador_id || null,
-    });
+    const { data: createdPromo, error } = await supabase.from("promo_codes").insert({
+      code: form.code.toUpperCase(),
+      discount_value: Number(form.discount_value),
+      discount_type: form.discount_type,
+      description: form.description || null,
+      max_usage: form.max_usage ? Number(form.max_usage) : null,
+      is_global: form.is_global,
+      ambassador_id: form.is_global ? null : ambassadorId,
+      active: true,
+    }).select("*").single();
     if (error) toast({ title: "Erreur", description: error.message, variant: "destructive" });
-    else { toast({ title: "Code promo créé" }); queryClient.invalidateQueries({ queryKey: ["admin-promos"] }); onClose(); }
+    else {
+      if (form.create_tracking_link && ambassadorId) {
+        const rawSlug = (form.tracking_slug || form.code || "VSM")
+          .toUpperCase()
+          .replace(/[^A-Z0-9]/g, "");
+        const finalSlug = rawSlug.length >= 4 ? rawSlug : `${rawSlug || "VSM"}${Math.floor(100 + Math.random() * 900)}`;
+        const { error: linkErr } = await supabase.from("ambassador_links").insert({
+          ambassador_id: ambassadorId,
+          slug: finalSlug,
+          target_type: "shop",
+          promo_code_id: createdPromo?.id || null,
+          active: true,
+        });
+        if (linkErr) {
+          toast({ title: "Code créé, lien échoué", description: linkErr.message, variant: "destructive" });
+        }
+      }
+
+      toast({ title: "Code promo créé" });
+      queryClient.invalidateQueries({ queryKey: ["admin-promos"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-ambassadors"] });
+      onClose();
+    }
     setSaving(false);
   };
   return (
@@ -360,7 +471,41 @@ const PromoForm = ({ onClose }: { onClose: () => void }) => {
         <div className="space-y-2"><label className="text-sm font-medium">Max utilisations</label><Input type="number" value={form.max_usage} onChange={(e) => setForm({ ...form, max_usage: e.target.value })} placeholder="Illimité" /></div>
       </div>
       <div className="space-y-2"><label className="text-sm font-medium">Description</label><Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
-      <div className="flex items-center gap-2"><Switch checked={form.is_global} onCheckedChange={(v) => setForm({ ...form, is_global: v })} /><label className="text-sm">Code global</label></div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="flex items-center gap-2">
+          <Switch checked={form.is_global} onCheckedChange={(v) => setForm({ ...form, is_global: v, ambassador_id: v ? "" : form.ambassador_id })} />
+          <label className="text-sm">Code global</label>
+        </div>
+        {!form.is_global && (
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Ambassadeur</label>
+            <Select value={form.ambassador_id} onValueChange={(v) => setForm({ ...form, ambassador_id: v })}>
+              <SelectTrigger><SelectValue placeholder="Sélectionner un ambassadeur" /></SelectTrigger>
+              <SelectContent>
+                {ambassadors.map((a) => (
+                  <SelectItem key={a.user_id} value={a.user_id}>
+                    {a.full_name} {a.username ? `(@${a.username})` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+      </div>
+      {!form.is_global && (
+        <div className="rounded-sm border border-border p-3 space-y-3">
+          <div className="flex items-center gap-2">
+            <Switch checked={form.create_tracking_link} onCheckedChange={(v) => setForm({ ...form, create_tracking_link: v })} />
+            <label className="text-sm">Créer aussi un lien tracking</label>
+          </div>
+          {form.create_tracking_link && (
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Slug du lien (optionnel)</label>
+              <Input value={form.tracking_slug} onChange={(e) => setForm({ ...form, tracking_slug: e.target.value })} placeholder="ex: BRANDON25" />
+            </div>
+          )}
+        </div>
+      )}
       <div className="flex justify-end gap-2">
         <Button type="button" variant="outline" onClick={onClose}>Annuler</Button>
         <Button type="submit" disabled={saving} className="gap-2">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}Créer</Button>
@@ -369,17 +514,312 @@ const PromoForm = ({ onClose }: { onClose: () => void }) => {
   );
 };
 
+/** Panneau latéral : vue globale d’un ambassadeur (tracking, promos, ventes, tendance). */
+const AmbassadorAdminDetailSheet = ({
+  application,
+  open,
+  onOpenChange,
+  orders,
+  promos,
+}: {
+  application: Record<string, unknown> | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  orders: Array<Record<string, unknown>>;
+  promos: Array<Record<string, unknown>>;
+}) => {
+  const userId = application?.user_id ? String(application.user_id) : null;
+
+  const { data: links, isLoading: linksLoading } = useQuery({
+    queryKey: ["admin-ambassador-links-detail", userId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("ambassador_links")
+        .select("*")
+        .eq("ambassador_id", userId!)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: open && !!userId,
+  });
+
+  const linkIds = useMemo(() => (links || []).map((l: { id: number }) => l.id), [links]);
+
+  const { data: clicks } = useQuery({
+    queryKey: ["admin-ambassador-clicks-detail", [...linkIds].sort((a, b) => a - b).join(",")],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("ambassador_clicks")
+        .select("id, link_id, clicked_at")
+        .in("link_id", linkIds);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: open && linkIds.length > 0,
+  });
+
+  const ambassadorOrders = useMemo(
+    () => (userId ? orders.filter((o) => String(o.ambassador_id) === userId) : []),
+    [orders, userId]
+  );
+
+  const ambassadorPromos = useMemo(
+    () => (userId ? promos.filter((p) => p.ambassador_id != null && String(p.ambassador_id) === userId) : []),
+    [promos, userId]
+  );
+
+  const confirmedStatuses = ["traitée", "expédiée"];
+  const confirmedAmbOrders = ambassadorOrders.filter((o) => confirmedStatuses.includes(String(o.status)));
+  const caAmb = confirmedAmbOrders.reduce((s, o) => s + Number(o.total_amount || 0), 0);
+  const totalClicks = (clicks || []).length;
+
+  const clicksByLinkId = useMemo(() => {
+    const m = new Map<number, number>();
+    (clicks || []).forEach((c: { link_id: number }) => {
+      m.set(c.link_id, (m.get(c.link_id) || 0) + 1);
+    });
+    return m;
+  }, [clicks]);
+
+  const evolutionData = useMemo(() => {
+    const byMonth = new Map<string, { month: string; ca: number; orders: number }>();
+    ambassadorOrders.forEach((o) => {
+      if (!o.created_at || !confirmedStatuses.includes(String(o.status))) return;
+      const d = new Date(String(o.created_at));
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const label = d.toLocaleDateString("fr-FR", { month: "short", year: "2-digit" });
+      const cur = byMonth.get(key) || { month: label, ca: 0, orders: 0 };
+      cur.ca += Number(o.total_amount || 0);
+      cur.orders += 1;
+      byMonth.set(key, cur);
+    });
+    return Array.from(byMonth.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([, v]) => v);
+  }, [ambassadorOrders]);
+
+  const copyText = (text: string) => {
+    void navigator.clipboard.writeText(text);
+    toast({ title: "Copié" });
+  };
+
+  if (!application) return null;
+
+  const fullName = String(application.full_name ?? "—");
+  const username = application.username ? `@${String(application.username).replace(/^@/, "")}` : "—";
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="w-full overflow-y-auto border-l border-border sm:max-w-xl" onOpenAutoFocus={(e) => e.preventDefault()}>
+        <SheetHeader className="border-b border-border pb-4 text-left">
+          <SheetTitle className="font-display text-xl">Fiche ambassadeur</SheetTitle>
+          <SheetDescription>
+            Suivi des performances, liens de tracking et commandes attribuées.
+          </SheetDescription>
+        </SheetHeader>
+
+        <div className="mt-6 space-y-6 pb-10">
+          <div className="rounded-lg border border-border bg-card/50 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="font-display text-lg font-semibold">{fullName}</p>
+                <p className="text-sm text-primary">{username}</p>
+                <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
+                  {application.phone != null && String(application.phone) && (
+                    <span className="flex items-center gap-1">
+                      <Phone className="h-3.5 w-3.5" />
+                      {String(application.phone)}
+                    </span>
+                  )}
+                  {(application.main_platform != null && String(application.main_platform)) && (
+                    <span>Réseau : {String(application.main_platform)}</span>
+                  )}
+                </div>
+              </div>
+              <Badge variant={application.status === "approved" ? "default" : application.status === "rejected" ? "destructive" : "secondary"}>
+                {application.status === "approved" ? "Approuvé" : application.status === "rejected" ? "Refusé" : "En attente"}
+              </Badge>
+            </div>
+            {!userId && (
+              <p className="mt-4 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-200">
+                Aucun compte utilisateur lié — statistiques de ventes et tracking complets après rattachement à la validation.
+              </p>
+            )}
+          </div>
+
+          {userId && (
+            <>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div className="rounded-lg border border-border bg-background p-3">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Clics</p>
+                  <p className="font-display text-lg font-bold">{totalClicks}</p>
+                </div>
+                <div className="rounded-lg border border-border bg-background p-3">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Commandes</p>
+                  <p className="font-display text-lg font-bold">{ambassadorOrders.length}</p>
+                </div>
+                <div className="rounded-lg border border-border bg-background p-3">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">CA confirmé</p>
+                  <p className="font-display text-lg font-bold text-primary">{formatPrice(caAmb)}</p>
+                </div>
+                <div className="rounded-lg border border-border bg-background p-3">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Conv. (approx.)</p>
+                  <p className="font-display text-lg font-bold">
+                    {totalClicks > 0 ? `${((confirmedAmbOrders.length / totalClicks) * 100).toFixed(1)} %` : "—"}
+                  </p>
+                </div>
+              </div>
+
+              {evolutionData.length > 0 && (
+                <div className="rounded-lg border border-border p-4">
+                  <p className="mb-3 font-display text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+                    Évolution du CA (confirmé)
+                  </p>
+                  <div className="h-44">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={evolutionData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                        <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+                        <YAxis tick={{ fontSize: 10 }} />
+                        <RechartsTooltip formatter={(v: number) => [formatPrice(v), "CA"]} />
+                        <Area type="monotone" dataKey="ca" stroke="hsl(var(--primary))" fill="hsl(var(--primary) / 0.15)" strokeWidth={2} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <p className="mb-2 font-display text-sm font-semibold uppercase tracking-wider">Liens de tracking</p>
+                {linksLoading ? (
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                ) : (links || []).length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Aucun lien.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {(links as Array<Record<string, unknown>>).map((link) => {
+                      const slug = String(link.slug);
+                      const url = `${window.location.origin}/a/${slug}`;
+                      const cid = Number(link.id);
+                      const n = clicksByLinkId.get(cid) ?? 0;
+                      return (
+                        <div key={cid} className="flex flex-col gap-2 rounded-md border border-border bg-secondary/30 p-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 text-sm font-medium">
+                              <Link2 className="h-4 w-4 shrink-0 text-primary" />
+                              <span className="truncate">/a/{slug}</span>
+                            </div>
+                            <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
+                              <span className="flex items-center gap-1">
+                                <MousePointerClick className="h-3.5 w-3.5" />
+                                {n} clic{n !== 1 ? "s" : ""}
+                              </span>
+                              <Badge variant="outline" className="text-[10px]">{String(link.target_type)}</Badge>
+                            </div>
+                          </div>
+                          <Button type="button" variant="ghost" size="sm" className="shrink-0 gap-1" onClick={() => copyText(url)}>
+                            <Copy className="h-4 w-4" />
+                            Copier
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <p className="mb-2 font-display text-sm font-semibold uppercase tracking-wider">Codes promo dédiés</p>
+                {ambassadorPromos.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Aucun code rattaché.</p>
+                ) : (
+                  <div className="overflow-hidden rounded-md border border-border">
+                    <table className="w-full text-sm">
+                      <thead className="bg-secondary/60">
+                        <tr>
+                          <th className="px-3 py-2 text-left font-medium">Code</th>
+                          <th className="px-3 py-2 text-left font-medium">Réduction</th>
+                          <th className="px-3 py-2 text-left font-medium">Util.</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {ambassadorPromos.map((p) => (
+                          <tr key={String(p.id)} className="border-t border-border">
+                            <td className="px-3 py-2 font-medium text-primary">{String(p.code)}</td>
+                            <td className="px-3 py-2">
+                              {String(p.discount_type) === "percent" ? `${p.discount_value}%` : formatPrice(Number(p.discount_value))}
+                            </td>
+                            <td className="px-3 py-2">{String(p.usage_count ?? 0)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <p className="mb-2 font-display text-sm font-semibold uppercase tracking-wider">Commandes attribuées</p>
+                {ambassadorOrders.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Aucune commande pour cet ambassadeur.</p>
+                ) : (
+                  <div className="max-h-60 overflow-auto rounded-md border border-border">
+                    <table className="w-full text-sm">
+                      <thead className="sticky top-0 bg-secondary/80">
+                        <tr>
+                          <th className="px-3 py-2 text-left font-medium">ID</th>
+                          <th className="px-3 py-2 text-left font-medium">Date</th>
+                          <th className="px-3 py-2 text-left font-medium">Statut</th>
+                          <th className="px-3 py-2 text-right font-medium">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {ambassadorOrders.map((o) => (
+                          <tr key={String(o.id)} className="border-t border-border">
+                            <td className="px-3 py-2">#{String(o.id)}</td>
+                            <td className="px-3 py-2 text-muted-foreground">
+                              {o.created_at ? formatDate(String(o.created_at)) : "—"}
+                            </td>
+                            <td className="px-3 py-2">
+                              <Badge variant="outline" className="text-[10px]">{String(o.status)}</Badge>
+                            </td>
+                            <td className="px-3 py-2 text-right font-medium">{formatPrice(Number(o.total_amount || 0))}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+};
+
 // =================== Main Admin Dashboard ===================
+const VALID_ADMIN_TABS = new Set(menuItems.map((m) => m.id));
+
 const AdminDashboard = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user, isAdmin, signOut, loading: authLoading, rolesLoading } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("dashboard");
   const [editProduct, setEditProduct] = useState<Tables<"products"> | null>(null);
   const [showProductForm, setShowProductForm] = useState(false);
   const [showPromoForm, setShowPromoForm] = useState(false);
+  const [promoDefaultAmbassadorId, setPromoDefaultAmbassadorId] = useState<string | undefined>(undefined);
+  const [ambassadorSheetApp, setAmbassadorSheetApp] = useState<Record<string, unknown> | null>(null);
   const [expandedOrder, setExpandedOrder] = useState<number | null>(null);
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab && VALID_ADMIN_TABS.has(tab)) setActiveTab(tab);
+  }, [searchParams]);
 
   const { data: products, isLoading: productsLoading } = useAllProducts();
   const deleteProduct = useDeleteProduct();
@@ -462,6 +902,20 @@ const AdminDashboard = () => {
     refetchInterval: 20000,
   });
 
+  const { data: withdrawalRequests } = useQuery({
+    queryKey: ["admin-withdrawals"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("ambassador_withdrawal_requests")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!user && isAdmin,
+    refetchInterval: 20000,
+  });
+
   const { data: clients } = useQuery({
     queryKey: ["admin-clients"],
     queryFn: async () => {
@@ -517,6 +971,13 @@ const AdminDashboard = () => {
     return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
   });
   const monthRevenue = thisMonth.reduce((s, o) => s + Number(o.total_amount), 0);
+  const avgBasket = confirmedOrders.length > 0 ? Math.floor(totalSales / confirmedOrders.length) : 0;
+  const todayRevenue = confirmedOrders
+    .filter((o) => {
+      if (!o.created_at) return false;
+      return new Date(o.created_at).toDateString() === now.toDateString();
+    })
+    .reduce((s, o) => s + Number(o.total_amount || 0), 0);
 
   const topSellingProducts = useMemo(() => {
     const namesById = new Map<number, string>();
@@ -543,6 +1004,16 @@ const AdminDashboard = () => {
       .sort((a, b) => b.qty - a.qty)
       .slice(0, 5);
   }, [confirmedItems, products]);
+
+  const approvedAmbassadors = useMemo(() => {
+    return (ambassadorApps || [])
+      .filter((a: any) => a.status === "approved" && a.user_id)
+      .map((a: any) => ({
+        user_id: String(a.user_id),
+        full_name: a.full_name || "Ambassadeur",
+        username: a.username || "",
+      }));
+  }, [ambassadorApps]);
 
   // Realtime + polling fallback
   useEffect(() => {
@@ -588,38 +1059,6 @@ const AdminDashboard = () => {
     };
   }, [user, isAdmin, queryClient]);
 
-  const stats = [
-    {
-      label: "Revenus",
-      value: formatPrice(totalSales),
-      sub: `${formatPrice(monthRevenue)} ce mois`,
-      icon: DollarSign,
-      color: "text-primary",
-    },
-    {
-      label: "Commandes",
-      value: totalOrders,
-      sub: `${pendingOrders.length} en attente`,
-      icon: ShoppingCart,
-      color: "text-primary",
-    },
-    {
-      label: "Articles vendus",
-      value: soldUnits,
-      sub: `${inventoryUnits} restants`,
-      icon: Package,
-      color: "text-primary",
-    },
-    {
-      label: "Clients",
-      value: totalClients,
-      sub: `${pendingApps} demandes ambassadeur`,
-      icon: Users,
-      color: "text-primary",
-    },
-  ];
-
-  // Handlers
   const [dzForm, setDzForm] = useState({ name: "", city: "", price: "" });
   const handleCreateDZ = async () => {
     if (!dzForm.name) return;
@@ -633,6 +1072,52 @@ const AdminDashboard = () => {
     if (error) { toast({ title: "Erreur", description: error.message, variant: "destructive" }); return; }
     toast({ title: `Candidature ${status === "approved" ? "approuvée" : "refusée"}` });
     queryClient.invalidateQueries({ queryKey: ["admin-ambassadors"] });
+
+    if (status === "approved") {
+      try {
+        const { data: app } = await (supabase as any)
+          .from("ambassador_applications")
+          .select("id, user_id, username, full_name")
+          .eq("id", id)
+          .maybeSingle();
+
+        const userId = app?.user_id as string | null | undefined;
+        if (!userId) return;
+
+        // Grant role ambassador (ignore if already granted)
+        await (supabase as any)
+          .from("user_roles")
+          .insert({ user_id: userId, role: "ambassador" })
+          .throwOnError?.();
+
+        // Ensure at least one active tracking link exists
+        const { data: existing } = await supabase
+          .from("ambassador_links")
+          .select("id")
+          .eq("ambassador_id", userId)
+          .limit(1);
+
+        if (!existing || existing.length === 0) {
+          const base = (app?.username || app?.full_name || "VSM")
+            .toString()
+            .replace(/^@/, "")
+            .toUpperCase()
+            .replace(/[^A-Z0-9]/g, "");
+          const slug = (base || "VSM") + Math.floor(100 + Math.random() * 900);
+          await supabase.from("ambassador_links").insert({
+            ambassador_id: userId,
+            slug,
+            target_type: "shop",
+            active: true,
+          });
+        }
+
+        toast({ title: "Ambassadeur activé", description: "Rôle et lien de tracking créés." });
+      } catch (e: any) {
+        // Don't block approval flow if provisioning fails
+        console.error("Ambassador provisioning error:", e);
+      }
+    }
   };
   const handleOrderStatus = async (id: number, status: string) => {
     const { error } = await supabase.from("orders").update({ status }).eq("id", id);
@@ -651,6 +1136,18 @@ const AdminDashboard = () => {
     if (error) { toast({ title: "Erreur", description: error.message, variant: "destructive" }); return; }
     queryClient.invalidateQueries({ queryKey: ["admin-promos"] });
   };
+  const handleWithdrawalStatus = async (id: number, status: string) => {
+    const { error } = await supabase
+      .from("ambassador_withdrawal_requests")
+      .update({ status, updated_at: new Date().toISOString() })
+      .eq("id", id);
+    if (error) {
+      toast({ title: "Erreur", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Demande mise à jour" });
+    queryClient.invalidateQueries({ queryKey: ["admin-withdrawals"] });
+  };
   const handleToggleDZ = async (id: number, is_active: boolean) => {
     await supabase.from("delivery_zones").update({ is_active }).eq("id", id);
     queryClient.invalidateQueries({ queryKey: ["admin-delivery"] });
@@ -659,6 +1156,26 @@ const AdminDashboard = () => {
     if (!confirm("Supprimer cette zone ?")) return;
     await supabase.from("delivery_zones").delete().eq("id", id);
     queryClient.invalidateQueries({ queryKey: ["admin-delivery"] });
+  };
+
+  const handleCreateTrackingForAmbassador = async (app: any) => {
+    if (!app?.user_id) {
+      toast({ title: "Compte non lié", description: "Cet ambassadeur n'a pas encore de compte utilisateur.", variant: "destructive" });
+      return;
+    }
+    const raw = (app.username || app.full_name || "VSM").toString().replace(/^@/, "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+    const slug = `${raw || "VSM"}${Math.floor(100 + Math.random() * 900)}`;
+    const { error } = await supabase.from("ambassador_links").insert({
+      ambassador_id: app.user_id,
+      slug,
+      target_type: "shop",
+      active: true,
+    });
+    if (error) {
+      toast({ title: "Erreur", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Lien tracking créé", description: `Slug: ${slug}` });
   };
 
   if (authLoading || rolesLoading) {
@@ -677,19 +1194,26 @@ const AdminDashboard = () => {
   }
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="admin-shell flex min-h-screen bg-background font-body">
       {/* Sidebar */}
-      <aside className={`fixed inset-y-0 left-0 z-50 w-64 transform border-r border-border bg-card transition-transform duration-300 lg:static lg:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
-        <div className="flex h-16 items-center justify-between border-b border-border px-4">
-          <h1 className="font-display text-xl font-bold"><span className="text-primary">VSM</span> Admin</h1>
-          <button onClick={() => setSidebarOpen(false)} className="lg:hidden"><X className="h-6 w-6" /></button>
+      <aside className={`fixed inset-y-0 left-0 z-50 w-64 max-w-[min(16rem,88vw)] transform border-r border-border bg-card transition-transform duration-300 lg:static lg:max-w-none lg:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
+        <div className="flex min-h-16 items-start justify-between gap-2 border-b border-border px-4 py-3">
+          <VsmBrandMark subtitle="Administration" compact />
+          <button
+            type="button"
+            onClick={() => setSidebarOpen(false)}
+            className="shrink-0 rounded-md p-2 hover:bg-secondary lg:hidden"
+            aria-label="Fermer le menu"
+          >
+            <X className="h-5 w-5" />
+          </button>
         </div>
         <nav className="p-4">
           <ul className="space-y-1">
             {menuItems.map((item) => (
               <li key={item.id}>
                 <button onClick={() => { setActiveTab(item.id); setSidebarOpen(false); }}
-                  className={`flex w-full items-center gap-3 rounded-sm px-4 py-3 text-sm font-medium transition-colors ${activeTab === item.id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-secondary hover:text-foreground"}`}>
+                  className={`flex w-full items-center gap-3 rounded-sm px-4 py-3 font-display text-xs font-semibold uppercase tracking-wider transition-colors ${activeTab === item.id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-secondary hover:text-foreground"}`}>
                   <item.icon className="h-5 w-5" />
                   {item.label}
                   {item.id === "ambassadors" && pendingApps > 0 && <Badge variant="destructive" className="ml-auto text-[10px]">{pendingApps}</Badge>}
@@ -710,149 +1234,273 @@ const AdminDashboard = () => {
       </aside>
 
       {/* Main */}
-      <main className="flex-1 overflow-auto">
-        <header className="flex h-16 items-center justify-between border-b border-border px-4 lg:px-8">
-          <button onClick={() => setSidebarOpen(true)} className="lg:hidden"><Menu className="h-6 w-6" /></button>
-          <h2 className="font-display text-lg font-semibold capitalize">{menuItems.find(m => m.id === activeTab)?.label || activeTab}</h2>
-          <span className="text-sm text-muted-foreground">{user?.email}</span>
+      <main className="flex min-w-0 flex-1 flex-col overflow-auto">
+        <header className="sticky top-0 z-30 border-b border-border/40 bg-background/90 backdrop-blur-md">
+          <div className="flex h-14 items-center gap-3 px-4 lg:px-8">
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(true)}
+              className="shrink-0 rounded-lg p-2 hover:bg-muted lg:hidden"
+              aria-label="Ouvrir le menu"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+            <div className="min-w-0 flex-1">
+              <h1 className="truncate font-display text-lg font-semibold uppercase tracking-wide md:text-xl">
+                {menuItems.find((m) => m.id === activeTab)?.label || "Admin"}
+              </h1>
+            </div>
+            <div className="hidden max-w-[220px] truncate rounded-full border border-border/60 bg-secondary/40 px-3 py-1.5 text-xs text-muted-foreground sm:block" title={user?.email ?? undefined}>
+              {user?.email}
+            </div>
+          </div>
         </header>
 
         <div className="p-4 lg:p-8">
-          {/* ============ DASHBOARD ============ */}
+          {/* ============ DASHBOARD (PRO) ============ */}
           {activeTab === "dashboard" && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8">
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                {stats.map((stat, i) => (
-                  <motion.div key={stat.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }} className="vsm-card p-6">
-                    <div className="flex items-center justify-between">
-                      <stat.icon className={`h-8 w-8 ${stat.color}`} />
-                      <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                {[
+                  { icon: DollarSign, label: "Chiffre d'affaires", value: formatPrice(totalSales), hint: `${formatPrice(monthRevenue)} ce mois`, badge: "Confirmées" },
+                  { icon: ShoppingCart, label: "Commandes", value: String(totalOrders), hint: `${pendingOrders.length} en attente`, badge: pendingOrders.length > 0 ? `${pendingOrders.length} à traiter` : undefined, alert: pendingOrders.length > 0 },
+                  { icon: Package, label: "Unités vendues", value: String(soldUnits), hint: `${inventoryUnits} en stock`, badge: (lowStockProducts.length + lowStockVariants.length) > 0 ? "Stock bas" : undefined, alert: (lowStockProducts.length + lowStockVariants.length) > 0 },
+                  { icon: Users, label: "Clients", value: String(totalClients), hint: `${pendingApps} candidature(s) amb.`, badge: pendingApps > 0 ? `${pendingApps} demandes` : undefined, alert: pendingApps > 0 },
+                ].map((kpi) => (
+                  <div key={kpi.label} className="relative overflow-hidden rounded-xl border border-border/50 bg-gradient-to-br from-card to-secondary/20 p-5 shadow-sm">
+                    <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-primary/70 via-primary/30 to-transparent" />
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="rounded-lg bg-primary/10 p-2.5">
+                        <kpi.icon className="h-5 w-5 text-primary" />
+                      </div>
+                      {kpi.badge && (
+                        <Badge variant={kpi.alert ? "destructive" : "secondary"} className="text-[10px]">{kpi.badge}</Badge>
+                      )}
                     </div>
-                    <p className="mt-4 font-display text-2xl font-bold">{stat.value}</p>
-                    <p className="text-sm text-muted-foreground">{stat.label}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">{stat.sub}</p>
-                  </motion.div>
+                    <p className="mt-4 font-display text-2xl font-bold tracking-tight">{kpi.value}</p>
+                    <p className="mt-1 text-sm font-medium text-foreground/90">{kpi.label}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{kpi.hint}</p>
+                  </div>
                 ))}
               </div>
 
-              {/* Low stock alert */}
-              {lowStockProducts.length > 0 && (
-                <div className="vsm-card border-yellow-500/50 p-4">
-                  <div className="mb-3 flex items-center gap-2">
-                    <AlertTriangle className="h-5 w-5 text-yellow-500" />
-                    <h3 className="font-display font-semibold">Alertes stock faible</h3>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="flex items-center justify-between rounded-xl border border-border/50 bg-card/60 px-5 py-4">
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Panier moyen</p>
+                    <p className="mt-1 font-display text-xl font-bold text-primary">{formatPrice(avgBasket)}</p>
                   </div>
-                  <div className="space-y-2">
-                    {lowStockProducts.map(p => (
-                      <div key={p.id} className="flex items-center justify-between rounded-sm bg-yellow-500/10 px-3 py-2">
-                        <div className="flex items-center gap-3">
-                          {p.image_url && <img src={p.image_url} alt="" className="h-8 w-8 rounded-sm object-cover" />}
-                          <span className="text-sm font-medium">{p.name}</span>
-                        </div>
-                        <Badge variant="destructive">{p.stock ?? 0} restant(s)</Badge>
-                      </div>
-                    ))}
+                  <p className="text-xs text-muted-foreground">{confirmedOrders.length} cmd. confirmées</p>
+                </div>
+                <div className="flex items-center justify-between rounded-xl border border-border/50 bg-card/60 px-5 py-4">
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Aujourd'hui</p>
+                    <p className="mt-1 font-display text-xl font-bold text-primary">{formatPrice(todayRevenue)}</p>
                   </div>
-                </div>
-              )}
-
-              <div className="grid gap-4 lg:grid-cols-2">
-                <div className="vsm-card p-6">
-                  <h3 className="mb-4 font-display text-lg font-semibold">Top produits vendus</h3>
-                  {topSellingProducts.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Aucune vente enregistrée.</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {topSellingProducts.map((product, index) => (
-                        <div key={product.productId} className="flex items-center justify-between rounded-sm border border-border px-3 py-2">
-                          <div className="flex items-center gap-2">
-                            <Badge variant="secondary">#{index + 1}</Badge>
-                            <span className="text-sm font-medium">{product.name}</span>
-                          </div>
-                          <span className="text-sm font-semibold text-primary">{product.qty} vendu(s)</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="vsm-card p-6">
-                  <h3 className="mb-4 font-display text-lg font-semibold">Variantes critiques</h3>
-                  {lowStockVariants.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Aucune variante critique.</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {lowStockVariants.slice(0, 6).map((variant) => (
-                        <div
-                          key={variant.id}
-                          className="flex items-center justify-between rounded-sm border border-border px-3 py-2"
-                        >
-                          <span className="text-sm text-muted-foreground">
-                            Produit #{variant.product_id} • {variant.color} / {variant.size}
-                          </span>
-                          <Badge variant="destructive">{variant.stock} restant(s)</Badge>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  <p className="text-xs text-muted-foreground">Revenus confirmés</p>
                 </div>
               </div>
 
-              {/* Recent orders */}
-              <div className="vsm-card p-6">
-                <div className="mb-4 flex items-center justify-between">
-                  <h3 className="font-display text-lg font-semibold">Commandes récentes</h3>
-                  <Button variant="ghost" size="sm" onClick={() => setActiveTab("orders")}>Voir tout</Button>
+              {/* Charts */}
+              <div className="grid gap-4 lg:grid-cols-5">
+                <div className="rounded-xl border border-border/50 bg-card p-6 lg:col-span-3">
+                  <div className="mb-4 flex items-center justify-between">
+                    <h4 className="font-display text-lg font-semibold">Revenus (14 jours)</h4>
+                    <span className="text-xs text-muted-foreground">Confirmées uniquement</span>
+                  </div>
+                  <div className="h-64 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart
+                        data={(() => {
+                          const days = 14;
+                          const now = new Date();
+                          const byDay = new Map<string, number>();
+                          confirmedOrders.forEach((o: any) => {
+                            if (!o.created_at) return;
+                            const d = new Date(o.created_at);
+                            const key = d.toISOString().slice(0, 10);
+                            byDay.set(key, (byDay.get(key) || 0) + Number(o.total_amount || 0));
+                          });
+                          const out: { day: string; value: number }[] = [];
+                          for (let i = days - 1; i >= 0; i--) {
+                            const d = new Date(now);
+                            d.setDate(now.getDate() - i);
+                            const key = d.toISOString().slice(0, 10);
+                            out.push({
+                              day: d.toLocaleDateString("fr-FR", { day: "2-digit", month: "short" }),
+                              value: byDay.get(key) || 0,
+                            });
+                          }
+                          return out;
+                        })()}
+                        margin={{ top: 10, right: 10, bottom: 0, left: 0 }}
+                      >
+                        <XAxis dataKey="day" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
+                        <YAxis tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
+                        <RechartsTooltip
+                          contentStyle={{
+                            background: "hsl(var(--card))",
+                            border: "1px solid hsl(var(--border))",
+                            borderRadius: 8,
+                          }}
+                          formatter={(v: any) => [formatPrice(Number(v)), "Revenus"]}
+                        />
+                        <Area type="monotone" dataKey="value" stroke="#E11D48" fill="#E11D48" fillOpacity={0.15} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                        </div>
                 </div>
-                {allOrders.length === 0 ? (
-                  <p className="text-muted-foreground">Aucune commande pour le moment.</p>
-                ) : (
-                  <div className="space-y-3">
-                    {allOrders.slice(0, 5).map((order) => {
-                      const statusInfo = ORDER_STATUSES[order.status] || ORDER_STATUSES.nouvelle;
+
+                <div className="rounded-xl border border-border/50 bg-card p-6 lg:col-span-2">
+                  <div className="mb-4 flex items-center justify-between">
+                    <h4 className="font-display text-lg font-semibold">Statuts commandes</h4>
+                    <span className="text-xs text-muted-foreground">Toutes</span>
+                  </div>
+                  <div className="h-64 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={(() => {
+                            const counts: Record<string, number> = {};
+                            allOrders.forEach((o: any) => {
+                              counts[o.status] = (counts[o.status] || 0) + 1;
+                            });
+                            return Object.entries(counts).map(([status, count]) => ({
+                              name: ORDER_STATUSES[status]?.label || status,
+                              status,
+                              value: count,
+                            }));
+                          })()}
+                          dataKey="value"
+                          nameKey="name"
+                          innerRadius={55}
+                          outerRadius={85}
+                          paddingAngle={2}
+                        >
+                          {(() => {
+                            const counts: Record<string, number> = {};
+                            allOrders.forEach((o: any) => { counts[o.status] = (counts[o.status] || 0) + 1; });
+                            return Object.keys(counts);
+                          })().map((status) => (
+                            <Cell key={status} fill={PRO_STATUS_COLORS[status] || "#64748B"} />
+                          ))}
+                        </Pie>
+                        <RechartsTooltip
+                          contentStyle={{
+                            background: "hsl(var(--card))",
+                            border: "1px solid hsl(var(--border))",
+                            borderRadius: 8,
+                          }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    </div>
+                  <div className="mt-4 grid gap-2">
+                    {(["nouvelle", "traitée", "expédiée", "annulée"] as const).map((s) => {
+                      const count = allOrders.filter((o: any) => o.status === s).length;
                       return (
-                        <div key={order.id} className="flex items-center justify-between rounded-sm border border-border p-3">
-                          <div>
-                            <span className="font-medium">#{order.id}</span>
-                            <span className="ml-2 text-sm text-muted-foreground">{(order as any).customer_name || "Client"}</span>
-                            <span className="ml-2 text-xs text-muted-foreground">{order.created_at ? formatDate(order.created_at) : ""}</span>
+                        <div key={s} className="flex items-center justify-between text-sm">
+                          <div className="flex items-center gap-2">
+                            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: PRO_STATUS_COLORS[s] }} />
+                            <span className="text-muted-foreground">{ORDER_STATUSES[s].label}</span>
                           </div>
-                          <div className="flex items-center gap-3">
-                            <span className="font-semibold text-primary">{formatPrice(Number(order.total_amount))}</span>
-                            <span className={`rounded-full px-2 py-1 text-xs font-medium ${statusInfo.color}`}>{statusInfo.label}</span>
-                          </div>
+                          <span className="font-medium">{count}</span>
                         </div>
                       );
                     })}
                   </div>
-                )}
+                </div>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-3">
-                <Button variant="outline" className="h-24 flex-col gap-2" onClick={() => { setEditProduct(null); setShowProductForm(true); setActiveTab("products"); }}>
-                  <Plus className="h-6 w-6 text-primary" />Ajouter un produit
+              <div className="grid gap-4 lg:grid-cols-5">
+                <div className="rounded-xl border border-border/50 bg-card p-6 lg:col-span-3">
+                <div className="mb-4 flex items-center justify-between">
+                    <h4 className="font-display text-lg font-semibold">Top produits (unités)</h4>
+                    <span className="text-xs text-muted-foreground">Confirmées</span>
+                </div>
+                  <div className="h-64 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={topSellingProducts.map((p) => ({ name: p.name, qty: p.qty }))} margin={{ left: 0, right: 10 }}>
+                        <XAxis dataKey="name" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" interval={0} angle={-15} textAnchor="end" height={60} />
+                        <YAxis tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
+                        <RechartsTooltip
+                          contentStyle={{
+                            background: "hsl(var(--card))",
+                            border: "1px solid hsl(var(--border))",
+                            borderRadius: 8,
+                          }}
+                        />
+                        <Bar dataKey="qty" fill="#E11D48" radius={[6, 6, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-border/50 bg-card p-6 lg:col-span-2">
+                  <div className="mb-4 flex items-center justify-between">
+                    <h4 className="font-display text-lg font-semibold">À traiter maintenant</h4>
+                    <Button variant="ghost" size="sm" onClick={() => setActiveTab("orders")}>Voir</Button>
+                  </div>
+                  {pendingOrders.length === 0 ? (
+                    <div className="rounded-sm border border-border bg-secondary p-4 text-sm text-muted-foreground">
+                      Aucune commande “nouvelle”. Bon travail.
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {pendingOrders.slice(0, 6).map((o: any) => (
+                        <div key={o.id} className="flex items-center justify-between rounded-sm border border-border px-3 py-2">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium">#{o.id} • {(o as any).customer_name || "Client"}</p>
+                            <p className="text-xs text-muted-foreground">{o.created_at ? formatDate(o.created_at) : ""}</p>
+                          </div>
+                          <div className="ml-3 flex items-center gap-2 text-right">
+                            <p className="text-sm font-semibold text-primary">{formatPrice(Number(o.total_amount || 0))}</p>
+                            <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ${ORDER_STATUSES.nouvelle.color}`}>
+                              {ORDER_STATUSES.nouvelle.label}
+                            </span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 px-2 text-xs"
+                              onClick={() => handleOrderStatus(o.id, "traitée")}
+                            >
+                              Marquer traitée
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                )}
+
+                  {(lowStockProducts.length > 0 || lowStockVariants.length > 0) && (
+                    <div className="mt-4 rounded-sm border border-yellow-500/40 bg-yellow-500/10 p-4">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="h-4 w-4 text-yellow-500" />
+                        <p className="text-sm font-medium">Alertes stock</p>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {lowStockProducts.length} produit(s) faible stock • {lowStockVariants.length} variante(s) critiques
+                      </p>
+                      <Button variant="ghost" size="sm" className="mt-3" onClick={() => setActiveTab("products")}>
+                        Aller aux produits
                 </Button>
-                <Button variant="outline" className="h-24 flex-col gap-2" onClick={() => { setShowPromoForm(true); setActiveTab("promos"); }}>
-                  <Tag className="h-6 w-6 text-primary" />Créer une promo
-                </Button>
-                <Button variant="outline" className="h-24 flex-col gap-2" onClick={() => setActiveTab("hero")}>
-                  <Image className="h-6 w-6 text-primary" />Modifier le héros
-                </Button>
+                    </div>
+                  )}
+                </div>
               </div>
             </motion.div>
           )}
 
           {/* ============ PRODUCTS ============ */}
           {activeTab === "products" && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h3 className="font-display text-xl font-bold">Gestion des produits</h3>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
+              <div className="flex justify-end">
                 <Dialog open={showProductForm} onOpenChange={setShowProductForm}>
                   <DialogTrigger asChild>
                     <Button className="gap-2" onClick={() => setEditProduct(null)}><Plus className="h-4 w-4" />Ajouter</Button>
                   </DialogTrigger>
-                  <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
-                    <DialogHeader><DialogTitle>{editProduct ? "Modifier le produit" : "Nouveau produit"}</DialogTitle></DialogHeader>
+                  <DialogContent className="max-h-[90vh] max-w-[min(100vw-2rem,42rem)] overflow-y-auto lg:max-w-4xl">
+                    <DialogHeader><DialogTitle className="font-display text-xl uppercase tracking-wide">{editProduct ? "Modifier le produit" : "Nouveau produit"}</DialogTitle></DialogHeader>
                     <ProductForm product={editProduct} onClose={() => setShowProductForm(false)} />
                   </DialogContent>
                 </Dialog>
@@ -915,15 +1563,12 @@ const AdminDashboard = () => {
 
           {/* ============ ORDERS ============ */}
           {activeTab === "orders" && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h3 className="font-display text-xl font-bold">Commandes ({allOrders.length})</h3>
-                <div className="flex gap-2">
-                  {Object.entries(ORDER_STATUSES).map(([key, val]) => {
-                    const count = allOrders.filter(o => o.status === key).length;
-                    return count > 0 ? <Badge key={key} variant="secondary" className="gap-1">{val.label} <span className="font-bold">{count}</span></Badge> : null;
-                  })}
-                </div>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                {Object.entries(ORDER_STATUSES).map(([key, val]) => {
+                  const count = allOrders.filter(o => o.status === key).length;
+                  return count > 0 ? <Badge key={key} variant="secondary" className="gap-1">{val.label} <span className="font-bold">{count}</span></Badge> : null;
+                })}
               </div>
               <div className="vsm-card overflow-hidden">
                 <div className="overflow-x-auto">
@@ -1074,7 +1719,7 @@ const AdminDashboard = () => {
                 <h3 className="font-display text-xl font-bold">Codes Promo</h3>
                 <Dialog open={showPromoForm} onOpenChange={setShowPromoForm}>
                   <DialogTrigger asChild><Button className="gap-2"><Plus className="h-4 w-4" />Nouveau code</Button></DialogTrigger>
-                  <DialogContent className="max-w-lg"><DialogHeader><DialogTitle>Créer un code promo</DialogTitle></DialogHeader><PromoForm onClose={() => setShowPromoForm(false)} /></DialogContent>
+                  <DialogContent className="max-w-lg"><DialogHeader><DialogTitle>Créer un code promo</DialogTitle></DialogHeader><PromoForm ambassadors={approvedAmbassadors} defaultAmbassadorId={promoDefaultAmbassadorId} onClose={() => { setShowPromoForm(false); setPromoDefaultAmbassadorId(undefined); }} /></DialogContent>
                 </Dialog>
               </div>
               <div className="vsm-card overflow-hidden">
@@ -1108,7 +1753,12 @@ const AdminDashboard = () => {
           {/* ============ AMBASSADORS ============ */}
           {activeTab === "ambassadors" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-              <h3 className="font-display text-xl font-bold">Candidatures Ambassadeurs</h3>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                <h3 className="font-display text-xl font-bold">Candidatures Ambassadeurs</h3>
+                <p className="max-w-xl text-sm text-muted-foreground">
+                  Cliquez sur une ligne pour ouvrir la fiche détaillée : ventes, liens, clics et codes promo.
+                </p>
+              </div>
               <div className="vsm-card overflow-hidden">
                 <table className="w-full">
                   <thead className="border-b border-border bg-secondary"><tr>
@@ -1117,11 +1767,24 @@ const AdminDashboard = () => {
                     <th className="px-4 py-3 text-left text-sm font-semibold">Plateforme</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold">Username</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold">Statut</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold">Fiche</th>
                     <th className="px-4 py-3 text-right text-sm font-semibold">Actions</th>
                   </tr></thead>
                   <tbody>
                     {(ambassadorApps || []).map((app) => (
-                      <tr key={app.id} className="border-b border-border last:border-0">
+                      <tr
+                        key={app.id}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            setAmbassadorSheetApp(app as Record<string, unknown>);
+                          }
+                        }}
+                        className="cursor-pointer border-b border-border last:border-0 hover:bg-muted/50"
+                        onClick={() => setAmbassadorSheetApp(app as Record<string, unknown>)}
+                      >
                         <td className="px-4 py-4 font-medium">{app.full_name}</td>
                         <td className="px-4 py-4 text-muted-foreground">{app.phone}</td>
                         <td className="px-4 py-4">{app.main_platform}</td>
@@ -1131,12 +1794,41 @@ const AdminDashboard = () => {
                             {app.status === "approved" ? "Approuvé" : app.status === "rejected" ? "Refusé" : "En attente"}
                           </Badge>
                         </td>
+                        <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
+                          {app.user_id ? (
+                            <Button size="sm" variant="secondary" asChild>
+                              <Link to={`/admin/ambassadeur/${app.user_id}`}>Page dédiée</Link>
+                            </Button>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">—</span>
+                          )}
+                        </td>
                         <td className="px-4 py-4">
-                          <div className="flex justify-end gap-2">
+                          <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
                             {app.status === "pending" && (
                               <>
                                 <Button size="sm" variant="outline" className="text-green-500" onClick={() => handleAppStatus(app.id, "approved")}><Check className="h-4 w-4" /></Button>
                                 <Button size="sm" variant="outline" className="text-red-500" onClick={() => handleAppStatus(app.id, "rejected")}><XCircle className="h-4 w-4" /></Button>
+                              </>
+                            )}
+                            {app.status === "approved" && (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleCreateTrackingForAmbassador(app)}
+                                  className="text-primary"
+                                >
+                                  Lien
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => { setPromoDefaultAmbassadorId(app.user_id || undefined); setShowPromoForm(true); setActiveTab("promos"); }}
+                                  className="text-primary"
+                                >
+                                  Promo
+                                </Button>
                               </>
                             )}
                           </div>
@@ -1146,6 +1838,87 @@ const AdminDashboard = () => {
                   </tbody>
                 </table>
                 {(ambassadorApps || []).length === 0 && <p className="py-8 text-center text-muted-foreground">Aucune candidature.</p>}
+              </div>
+              <AmbassadorAdminDetailSheet
+                application={ambassadorSheetApp}
+                open={!!ambassadorSheetApp}
+                onOpenChange={(v) => { if (!v) setAmbassadorSheetApp(null); }}
+                orders={allOrders as Array<Record<string, unknown>>}
+                promos={(promoCodes || []) as Array<Record<string, unknown>>}
+              />
+            </motion.div>
+          )}
+
+          {/* ============ RETRAITS AMBASSADEURS ============ */}
+          {activeTab === "withdrawals" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h3 className="font-display text-xl font-bold">Retraits Mobile Money</h3>
+                <Badge variant="secondary">
+                  {(withdrawalRequests || []).filter((w: { status: string }) => w.status === "pending").length} en attente
+                </Badge>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Les ambassadeurs peuvent demander un retrait après 10 commandes confirmées. Vérifiez les ventes puis marquez payé ou refusé.
+              </p>
+              <div className="vsm-card overflow-hidden">
+                <table className="w-full">
+                  <thead className="border-b border-border bg-secondary">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-sm font-semibold">#</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold">Date</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold">Ambassadeur</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold">Opérateur</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold">Numéro</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold">Bénéficiaire</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold">Statut</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(withdrawalRequests || []).map((w: Tables<"ambassador_withdrawal_requests">) => {
+                      const prof = (clients || []).find((c) => c.id === w.ambassador_id);
+                      const ambLabel = prof?.full_name || prof?.name || w.ambassador_id.slice(0, 8) + "…";
+                      const opLabel =
+                        w.mobile_operator === "airtel"
+                          ? "Airtel"
+                          : w.mobile_operator === "mpesa"
+                            ? "M-Pesa"
+                            : w.mobile_operator === "orange"
+                              ? "Orange"
+                              : w.mobile_operator;
+                      return (
+                        <tr key={w.id} className="border-b border-border last:border-0">
+                          <td className="px-4 py-4 font-medium">{w.id}</td>
+                          <td className="px-4 py-4 text-sm text-muted-foreground">{formatDate(w.created_at)}</td>
+                          <td className="px-4 py-4 text-sm">{ambLabel}</td>
+                          <td className="px-4 py-4 text-sm">{opLabel}</td>
+                          <td className="px-4 py-4 font-mono text-sm">{w.msisdn}</td>
+                          <td className="px-4 py-4 text-sm">{w.beneficiary_name}</td>
+                          <td className="px-4 py-4">
+                            <Select
+                              value={w.status}
+                              onValueChange={(v) => handleWithdrawalStatus(w.id, v)}
+                              disabled={w.status === "paid" || w.status === "rejected"}
+                            >
+                              <SelectTrigger className="h-8 w-[140px]">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="pending">En attente</SelectItem>
+                                <SelectItem value="approved">Approuvée</SelectItem>
+                                <SelectItem value="paid">Payée</SelectItem>
+                                <SelectItem value="rejected">Refusée</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                {(withdrawalRequests || []).length === 0 && (
+                  <p className="py-8 text-center text-muted-foreground">Aucune demande de retrait.</p>
+                )}
               </div>
             </motion.div>
           )}

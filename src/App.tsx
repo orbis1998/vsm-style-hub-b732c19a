@@ -13,6 +13,7 @@ import Contact from "./pages/Contact";
 import Cart from "./pages/Cart";
 import Checkout from "./pages/Checkout";
 import Auth from "./pages/Auth";
+import ResetPassword from "./pages/ResetPassword";
 import AdminDashboard from "./pages/AdminDashboard";
 import AmbassadorDashboard from "./pages/AmbassadorDashboard";
 import ClientDashboard from "./pages/ClientDashboard";
@@ -32,12 +33,13 @@ const App = () => (
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/boutique" element={<Boutique />} />
-              <Route path="/produit/:id" element={<ProductDetail />} />
+              <Route path="/produit/:slug" element={<ProductDetail />} />
               <Route path="/a-propos" element={<About />} />
               <Route path="/contact" element={<Contact />} />
               <Route path="/panier" element={<Cart />} />
               <Route path="/commande" element={<Checkout />} />
               <Route path="/connexion" element={<Auth />} />
+              <Route path="/reinitialiser-mot-de-passe" element={<ResetPassword />} />
               <Route path="/admin" element={<AdminDashboard />} />
               <Route path="/ambassadeur" element={<AmbassadorDashboard />} />
               <Route path="/mon-compte" element={<ClientDashboard />} />
